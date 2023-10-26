@@ -44,6 +44,3 @@ class RPMPlanner(BasePlanner):
 
             # Add the new node to the tree
             node_list.append(n_grid)
-
-        # After the loop, the tree is constructed, and you can find a path to the goal (if it exists)
-        # You can use various path extraction methods to find the path based on your requirements.
