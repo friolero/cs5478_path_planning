@@ -23,7 +23,7 @@ class Evaluator:
         )
         return (start_node, end_node)
 
-    def __call__(self, planner):
+    def __call__(self, planner, vis=False):
         def cal_curvature(path):
             data = np.vstack([(wp.x, wp.y) for wp in path])
 
@@ -52,12 +52,13 @@ class Evaluator:
 
             success = path is not None
             if success:
-                vis_path(self._map, path)
                 n_success += 1
                 path_lengths.append(len(path))
                 curvature = cal_curvature(path)
                 mean_curvatures.append(curvature.mean())
                 max_curvatures.append(np.abs(curvature).max())
+                if vis:
+                    vis_path(self._map, path)
             time_taken.append(end_time - start_time)
             print(
                 f"        Success: {success}; path length: {path_lengths[-1]}; mean curvature: {mean_curvatures[-1]}; Time taken: {time_taken[-1]}s"
