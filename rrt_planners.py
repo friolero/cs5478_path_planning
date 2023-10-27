@@ -67,7 +67,7 @@ class RRT(BasePlanner):
                 break
             else:
                 _, nearest_dist = sort_with_distance(end_node, node_list)
-        return path
+        return path, path is not None
 
 
 class BiRRT(RRT):
@@ -153,7 +153,7 @@ class BiRRT(RRT):
                 )
                 return path
 
-        return path
+        return path, path is not None
 
 
 class RRTStar(RRT):
@@ -215,4 +215,4 @@ class RRTStar(RRT):
                 break
             else:
                 _, nearest_dist = sort_with_distance(end_node, node_list)
-        return path
+        return path, path is not None

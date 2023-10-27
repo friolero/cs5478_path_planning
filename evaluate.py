@@ -2,6 +2,7 @@ import sys
 import time
 
 import numpy as np
+from apf_planner import ArtificialPotentialField as APF
 from map import ImageMap2D
 from rrt_planners import RRT, BiRRT, RRTStar
 from tqdm import tqdm
@@ -47,10 +48,9 @@ class Evaluator:
         for i, (start_node, end_node) in enumerate(self._eval_cases):
             print(f"     ==> test case {i}")
             start_time = time.time()
-            path = planner.plan(self._map, start_node, end_node)
+            path, success = planner.plan(self._map, start_node, end_node)
             end_time = time.time()
 
-            success = path is not None
             if success:
                 n_success += 1
                 path_lengths.append(len(path))
@@ -89,8 +89,16 @@ if __name__ == "__main__":
         "RRT": RRT(n_samples, delta_dist),
         "BiRRT": BiRRT(n_samples, delta_dist),
         "RRTStar": RRTStar(n_samples, delta_dist, n_neighbors=5),
+        "APF": APF(
+            max_iterations=100,
+            k_att=1.5,
+            k_rep=1.0,
+            step_size=2.0,
+            radius=5,
+            auto_tune=False,
+        ),
     }
 
-    results = evaluator(planners[sys.argv[1]])
+    results = evaluator(planners[sys.argv[1]], vis=True)
     print("Overall results:")
     print(results)
