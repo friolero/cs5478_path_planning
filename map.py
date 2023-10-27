@@ -1,6 +1,6 @@
-import numpy as np
 from PIL import Image
 
+import numpy as np
 from primitives import Node
 
 # class RandomMap2D:
@@ -29,6 +29,10 @@ class ImageMap2D:
     @property
     def free_conf(self):
         return self._free_conf
+
+    @property
+    def obstacle_conf(self):
+        return self._obstacle_conf
 
     def convert(self, image_fn):
         image = Image.open(image_fn).convert("L")
@@ -78,10 +82,13 @@ class ImageMap2D:
 
     def parse_free_conf(self):
         self._free_conf = []
+        self._obstacle_conf = []
         for i in range(self.row):
             for j in range(self.col):
                 if not self.in_collision(i, j):
                     self._free_conf.append(Node(i, j, None))
+                else:
+                    self._obstacle_conf.append(Node(i, j, None))
 
     def is_valid_conf(self, point):
         if (point.x >= self.row) or (point.y >= self.col):
