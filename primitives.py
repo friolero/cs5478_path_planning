@@ -2,9 +2,10 @@ from utils import distance
 
 
 class Node(object):
-    def __init__(self, x, y):
+    def __init__(self, x, y, parent_node):
         self._x = x
         self._y = y
+        self.parent = parent_node
 
     @property
     def x(self):

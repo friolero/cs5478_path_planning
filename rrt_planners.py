@@ -1,33 +1,158 @@
-import numpy as np
+import random
 
+import numpy as np
 from base_planner import BasePlanner
+from primitives import Node
 from utils import distance, sort_with_distance
 
 
 class RRT(BasePlanner):
-    def __init__(self, num_vertices, delta_dist):
-        self._num_vertices = num_vertices
+    def __init__(self, n_samples, delta_dist):
+        self._n_samples = n_samples
         self._delta_dist = delta_dist
 
-    def plan(self, map, start_conf, end_conf):
-        # randomly sample N points
-        # start from start point
-        # find nearest point without collision from the current point
-        node_list = [start_conf]
-        random_vertices = np.random.choice(
-            map.free_conf,
-            size=min(self._num_vertices, len(map.free_conf)),
-            replace=False,
+    def extend(self, start_node, end_node, map, dist):
+        if dist is None:
+            dist = distance(start_node, end_node)
+        dist_ratio = self._delta_dist / dist
+        expand_node = Node(
+            start_node.x + int(dist_ratio * (end_node.x - start_node.x)),
+            start_node.y + int(dist_ratio * (end_node.y - start_node.y)),
+            start_node,
         )
-        for i in range(self._num_vertices):
+        if not map.in_range(expand_node):
+            return None
+        elif map.line_in_collision(start_node, expand_node):
+            return None
+        else:
+            return expand_node
+
+    def retrace_path(self, node):
+        path = []
+        while True:
+            path.insert(0, node)
+            if node.parent is None:
+                break
+            else:
+                node = node.parent
+        return path
+
+    def plan(self, map, start_node, end_node):
+        # start from start point
+        node_list = [start_node]
+        # randomly sample N points
+        random_vertices = np.random.choice(
+            map.free_conf, size=self._n_samples, replace=True
+        )
+
+        path = None
+        for i in range(self._n_samples):
+            random_vertice = random_vertices[i]
             nearest_idx, nearest_dist = sort_with_distance(
-                random_vertices[i], node_list
+                random_vertice, node_list
             )
             if nearest_dist == 0:
                 continue
-            nearest_node = node_list[nearest_idx]
-            dist_ratio = self._delta_dist / nearest_dist
-            n_grid = max(
-                int(dist_ratio * (random_vertices[i].x - nearest_node.x)),
-                int(dist_ratio * (random_vertices[i].y - nearest_node.y)),
+            expand_node = self.extend(
+                node_list[nearest_idx], random_vertice, map, nearest_dist
             )
+            if expand_node is None:
+                continue
+            node_list.append(expand_node)
+            if (distance(expand_node, end_node) < self._delta_dist) and (
+                not map.line_in_collision(expand_node, end_node)
+            ):
+                path = self.retrace_path(expand_node)
+                path.append(end_node)
+                break
+            else:
+                _, nearest_dist = sort_with_distance(end_node, node_list)
+                print(i, len(node_list), nearest_dist)
+        return path
+
+
+class BiRRT(RRT):
+    def reverse_parent(self, node_list, root_parent=None):
+        reversed_node_list = []
+        for i, node in enumerate(node_list):
+            if i == 0:
+                parent = root_parent
+            else:
+                parent = node_list[-i]
+            reversed_node_list.append(
+                Node(node_list[-(i + 1)].x, node_list[-(i + 1)].y, parent)
+            )
+        return reversed_node_list
+
+    def plan(self, map, start_node, end_node):
+
+        node_lists = [[start_node], [end_node]]
+        random_vertices_lists = [
+            np.random.choice(map.free_conf, size=self._n_samples, replace=True),
+            np.random.choice(map.free_conf, size=self._n_samples, replace=True),
+        ]
+
+        path = None
+        for i in range(self._n_samples):
+            # expand the tree starting from start node
+            random_vertice_0 = random_vertices_lists[0][i]
+            nearest_idx, nearest_dist = sort_with_distance(
+                random_vertice_0, node_lists[0]
+            )
+            if nearest_dist == 0:
+                continue
+            expand_node_0 = self.extend(
+                node_lists[0][nearest_idx], random_vertice_0, map, nearest_dist
+            )
+            if expand_node_0 is None:
+                continue
+            # expand the tree starting from end node
+            random_vertice_1 = random_vertices_lists[1][i]
+            nearest_idx, nearest_dist = sort_with_distance(
+                random_vertice_1, node_lists[1]
+            )
+            if nearest_dist == 0:
+                continue
+            expand_node_1 = self.extend(
+                node_lists[1][nearest_idx], random_vertice_1, map, nearest_dist
+            )
+            if expand_node_1 is None:
+                continue
+
+            node_lists[0].append(expand_node_0)
+            node_lists[1].append(expand_node_1)
+
+            # see if it is possible to connect from  tree 1
+            nearest_idx_0, nearest_dist_0 = sort_with_distance(
+                expand_node_0, node_lists[1]
+            )
+            if (nearest_dist_0 < self._delta_dist) and (
+                not map.line_in_collision(
+                    expand_node_0, node_lists[1][nearest_idx_0]
+                )
+            ):
+                first_path = self.retrace_path(node_lists[0][-1])
+                second_path = self.retrace_path(node_lists[1][nearest_idx_0])
+                path = first_path + self.reverse_parent(
+                    second_path, root_parent=first_path[-1]
+                )
+                return path
+
+            # see if it is possible to connect from  tree 2
+            nearest_idx_1, nearest_dist_1 = sort_with_distance(
+                expand_node_1, node_lists[0]
+            )
+            if (nearest_dist_1 < self._delta_dist) and (
+                not map.line_in_collision(
+                    expand_node_1, node_lists[0][nearest_idx_1]
+                )
+            ):
+                first_path = self.retrace_path(node_lists[0][nearest_idx_1])
+                second_path = self.retrace_path(node_lists[1][-1])
+                path = first_path + self.reverse_parent(
+                    second_path, root_parent=first_path[-1]
+                )
+                return path
+            print(i, nearest_dist_0, nearest_dist_1)
+
+        return path
