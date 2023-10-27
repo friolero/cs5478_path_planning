@@ -7,7 +7,7 @@ from utils import distance, knn, sort_with_distance
 
 
 class RRT(BasePlanner):
-    def __init__(self, n_samples, delta_dist):
+    def __init__(self, n_samples, delta_dist=5):
         self._n_samples = n_samples
         self._delta_dist = delta_dist
 
@@ -159,7 +159,7 @@ class BiRRT(RRT):
 
 
 class RRTStar(RRT):
-    def __init__(self, n_samples, delta_dist, n_neighbors):
+    def __init__(self, n_samples, delta_dist=5, n_neighbors=5):
         self._n_neighbors = n_neighbors
         super().__init__(n_samples, delta_dist)
 
@@ -190,14 +190,19 @@ class RRTStar(RRT):
                 )
                 tmp_knn_cost = []
                 for idx, dist in zip(knn_indices, knn_dists):
-                    tmp_knn_cost.append(node_cost[idx] + dist)
-                nearest_idx = knn_indices[np.argmin(tmp_knn_cost)]
-                expand_node.parent = node_list[nearest_idx]
+                    if not map.line_in_collision(expand_node, node_list[idx]):
+                        tmp_knn_cost.append(node_cost[idx] + dist)
+                    else:
+                        tmp_knn_cost.append(np.inf)
                 node_list.append(expand_node)
                 expand_node_cost = min(tmp_knn_cost)
                 node_cost.append(expand_node_cost)
+                nearest_idx = knn_indices[np.argmin(tmp_knn_cost)]
+                expand_node.parent = node_list[nearest_idx]
                 for idx, dist in zip(knn_indices, knn_dists):
-                    if (expand_node_cost + dist) < node_cost[idx]:
+                    if ((expand_node_cost + dist) < node_cost[idx]) and (
+                        not map.line_in_collision(expand_node, node_list[idx])
+                    ):
                         node_list[idx].parent = node_list[-1]
                         node_cost[idx] = expand_node_cost + dist
             else:
