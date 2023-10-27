@@ -23,3 +23,28 @@ class Node(object):
 
     def distance_to(self, other_node):
         return distance(self, other_node)
+    
+    # 加上测试一下
+    def __add__(self, other):
+        if isinstance(other, Node):
+            return Node(self.x + other.x, self.y + other.y, None)
+        else:
+            raise TypeError("Unsupported operand type for addition")
+
+    def __sub__(self, other):
+        if isinstance(other, Node):
+            return Node(self.x - other.x, self.y - other.y, None)
+        else:
+            raise TypeError("Unsupported operand type for subtraction")
+
+    def __mul__(self, other):
+        if isinstance(other, (int, float)):
+            return Node(self.x * other, self.y * other, None)
+        else:
+            raise TypeError("Unsupported operand type for multiplication")
+
+    def __rmul__(self, other):
+        if isinstance(other, (int, float)):
+            return Node(other * self.x, other * self.y, None)
+        else:
+            raise TypeError("Unsupported operand type for multiplication")
