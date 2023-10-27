@@ -50,19 +50,19 @@ class Evaluator:
             start_time = time.time()
             path, success = planner.plan(self._map, start_node, end_node)
             end_time = time.time()
+            if vis and (path is not None):
+                vis_path(self._map, path)
 
+            time_taken.append(end_time - start_time)
             if success:
                 n_success += 1
                 path_lengths.append(len(path))
                 curvature = cal_curvature(path)
                 mean_curvatures.append(curvature.mean())
                 max_curvatures.append(np.abs(curvature).max())
-                if vis:
-                    vis_path(self._map, path)
-            time_taken.append(end_time - start_time)
-            print(
-                f"        Success: {success}; path length: {path_lengths[-1]}; mean curvature: {mean_curvatures[-1]}; Time taken: {time_taken[-1]}s"
-            )
+                print(
+                    f"        Success: {success}; path length: {path_lengths[-1]}; mean curvature: {mean_curvatures[-1]}; Time taken: {time_taken[-1]}s"
+                )
 
         results = {
             "success_rate": float(n_success) / len(self._eval_cases),
@@ -80,7 +80,7 @@ class Evaluator:
 
 if __name__ == "__main__":
 
-    map = ImageMap2D("data/2d_maze_2.png")
+    map = ImageMap2D("data/2d_maze_3.png")
     evaluator = Evaluator(map, n_eval=10, seed=77)
 
     n_samples = 20000

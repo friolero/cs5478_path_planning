@@ -1,6 +1,5 @@
-import random
-
 import numpy as np
+
 from base_planner import BasePlanner
 from primitives import Node
 from utils import distance, knn, sort_with_distance
@@ -135,7 +134,7 @@ class BiRRT(RRT):
                 path = first_path + self.reverse_parent(
                     second_path, root_parent=first_path[-1]
                 )
-                return path
+                return path, True
 
             # see if it is possible to connect from  tree 2
             nearest_idx_1, nearest_dist_1 = sort_with_distance(
@@ -151,7 +150,7 @@ class BiRRT(RRT):
                 path = first_path + self.reverse_parent(
                     second_path, root_parent=first_path[-1]
                 )
-                return path
+                return path, True
 
         return path, path is not None
 

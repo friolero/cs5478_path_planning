@@ -1,9 +1,8 @@
 import random
 from copy import deepcopy
 
-from PIL import Image, ImageDraw
-
 import numpy as np
+from PIL import Image
 
 
 def set_seed(seed):

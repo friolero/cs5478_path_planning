@@ -23,8 +23,7 @@ class Node(object):
 
     def distance_to(self, other_node):
         return distance(self, other_node)
-    
-    # 加上测试一下
+
     def __add__(self, other):
         if isinstance(other, Node):
             return Node(self.x + other.x, self.y + other.y, None)
