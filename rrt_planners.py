@@ -3,7 +3,7 @@ import random
 import numpy as np
 from base_planner import BasePlanner
 from primitives import Node
-from utils import distance, sort_with_distance
+from utils import distance, knn, sort_with_distance
 
 
 class RRT(BasePlanner):
@@ -155,4 +155,62 @@ class BiRRT(RRT):
                 return path
             print(i, nearest_dist_0, nearest_dist_1)
 
+        return path
+
+
+class RRTStar(RRT):
+    def __init__(self, n_samples, delta_dist, n_neighbors):
+        self._n_neighbors = n_neighbors
+        super().__init__(n_samples, delta_dist)
+
+    def plan(self, map, start_node, end_node):
+
+        node_list = [start_node]
+        node_cost = [0]
+        random_vertices = np.random.choice(
+            map.free_conf, size=self._n_samples, replace=True
+        )
+
+        path = None
+        for i in range(self._n_samples):
+            random_vertice = random_vertices[i]
+            nearest_idx, nearest_dist = sort_with_distance(
+                random_vertice, node_list
+            )
+            if nearest_dist == 0:
+                continue
+            expand_node = self.extend(
+                node_list[nearest_idx], random_vertice, map, nearest_dist
+            )
+            if expand_node is None:
+                continue
+            if len(node_list) > self._n_neighbors:
+                knn_indices, knn_dists = knn(
+                    expand_node, node_list, self._n_neighbors
+                )
+                tmp_knn_cost = []
+                for idx, dist in zip(knn_indices, knn_dists):
+                    tmp_knn_cost.append(node_cost[idx] + dist)
+                nearest_idx = knn_indices[np.argmin(tmp_knn_cost)]
+                expand_node.parent = node_list[nearest_idx]
+                node_list.append(expand_node)
+                expand_node_cost = min(tmp_knn_cost)
+                node_cost.append(expand_node_cost)
+                for idx, dist in zip(knn_indices, knn_dists):
+                    if (expand_node_cost + dist) < node_cost[idx]:
+                        node_list[idx].parent = node_list[-1]
+                        node_cost[idx] = expand_node_cost + dist
+            else:
+                node_list.append(expand_node)
+                node_cost.append(node_cost[nearest_idx] + nearest_dist)
+
+            if (distance(expand_node, end_node) < self._delta_dist) and (
+                not map.line_in_collision(expand_node, end_node)
+            ):
+                path = self.retrace_path(expand_node)
+                path.append(end_node)
+                break
+            else:
+                _, nearest_dist = sort_with_distance(end_node, node_list)
+                print(i, len(node_list), nearest_dist)
         return path

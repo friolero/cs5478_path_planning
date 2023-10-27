@@ -50,9 +50,15 @@ def distance(point_a, point_b):
 def sort_with_distance(node, neighbor_nodes):
     dists = [distance(node, neighbor_node) for neighbor_node in neighbor_nodes]
     dists = np.array(dists).reshape(-1)
-    nearest_indices = np.argsort(dists, axis=-1)
+    nearest_indices = np.argsort(dists, axis=-1).tolist()
     nearest_dists = [dists[idx] for idx in nearest_indices]
     return nearest_indices[0], nearest_dists[0]
 
 
-# def neighbor_in_range
+def knn(node, neighbor_nodes, k):
+    assert len(neighbor_nodes) > k, "Not enough neighbors."
+    dists = [distance(node, neighbor_node) for neighbor_node in neighbor_nodes]
+    dists = np.array(dists).reshape(-1)
+    nearest_indices = np.argsort(dists, axis=-1).tolist()
+    nearest_dists = [dists[idx] for idx in nearest_indices]
+    return nearest_indices[:k], nearest_dists[:k]

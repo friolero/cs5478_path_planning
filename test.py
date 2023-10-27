@@ -3,7 +3,7 @@ import sys
 import ipdb
 import numpy as np
 from map import ImageMap2D
-from rrt_planners import RRT, BiRRT
+from rrt_planners import RRT, BiRRT, RRTStar
 from tqdm import tqdm
 from utils import distance, vis_map, vis_path
 
@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     planner = RRT(100000, 5)
     planner = BiRRT(100000, 5)
-    vis_path(map, [start_node, end_node])
+    planner = RRTStar(100000, 5, n_neighbors=5)
 
     path = planner.plan(map, start_node, end_node)
     if path is None:
