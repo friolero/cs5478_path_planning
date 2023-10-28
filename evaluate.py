@@ -82,10 +82,9 @@ class Evaluator:
 
 if __name__ == "__main__":
 
-    map = ImageMap2D("data/2d_maze_2.png", distance_field=True)
-    import ipdb
+    map = ImageMap2D("data/2d_maze_2.png")
+    map = ImageMap2D("data/2d_map_4.png")
 
-    ipdb.set_trace()
     evaluator = Evaluator(map, n_eval=10, seed=77)
 
     n_samples = 20000
@@ -103,10 +102,7 @@ if __name__ == "__main__":
             auto_tune=False,
         ),
         "CHOMP": CHOMP(
-            max_iterations=1000,
-            n_waypoints=100,
-            grad_clip=10,
-            lr=0.01,
+            max_iterations=1000, n_waypoints=100, grad_clip=10, lr=0.01
         ),
     }
 
