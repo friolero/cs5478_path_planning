@@ -4,6 +4,7 @@ import scipy
 from base_planner import BasePlanner
 from primitives import Node
 from utils import distance, knn, sort_with_distance
+from utils import vis_path
 
 
 class CHOMP:
