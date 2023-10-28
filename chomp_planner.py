@@ -13,7 +13,7 @@ class CHOMP:
         n_samples=1,
         n_waypoints=64,
         max_iterations=1000,
-        lr=0.01,
+        lr=0.1,
         grad_clip=30,
         eps=3,
         collision_weight=1,
@@ -197,6 +197,12 @@ class CHOMP:
 
         init_traj = self.sample_trajectories(start_node, end_node)[0][..., :2]
 
+        last_err = 1e6
+        n_err_increase = 0
+        patience = 5
+        decay_rate = 0.1
+        lr = self._lr
+
         success = False
         traj_history = [init_traj]
         for n_iter in range(self._max_iterations):
@@ -243,17 +249,27 @@ class CHOMP:
             dxi = dxi.reshape((self._n_waypoints, 2))
             dxi[0, :] = 0.0
             dxi[-1, :] = 0.0
-            xi_ = xi_ - dxi * self._lr
+            xi_ = xi_ - dxi * lr
             xi_ = self.clip(xi_, map)
             traj_history.append(xi_)
-            # if (n_iter % 100) == 0:
-            #    vis_path(map, self.postprocess(map, traj_history[-1]))
+            if (n_iter % 100) == 0:
+                vis_path(map, self.postprocess(map, traj_history[-1]))
 
             err = np.linalg.norm(dxi)
+            if err >= last_err:
+                n_err_increase += 1
+                if n_err_increase >= patience:
+                    lr *= decay_rate
+            else:
+                n_err_increase = 0
+            last_err = err
+
             if err < self._dist_threshold:
                 break
             else:
-                print(n_iter, err)
+                print(n_iter, lr, n_err_increase, err)
+        if (n_iter % 100) == 0:
+            vis_path(map, self.postprocess(map, traj_history[-1]))
         return self.postprocess(map, traj_history[-1]), success
 
 
@@ -266,7 +282,7 @@ if __name__ == "__main__":
         map.free_conf, size=2, replace=False
     )
 
-    chomp = CHOMP(lr=0.001)
+    chomp = CHOMP()
     path, success = chomp.plan(map, start_node, end_node, return_history=True)
     import ipdb
 
