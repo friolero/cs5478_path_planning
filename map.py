@@ -1,6 +1,6 @@
+import numpy as np
 from PIL import Image
 
-import numpy as np
 from primitives import Node
 
 # class RandomMap2D:
@@ -8,11 +8,15 @@ from primitives import Node
 
 
 class ImageMap2D:
-    def __init__(self, image_fn, threshold=0.5):
+    def __init__(self, image_fn, threshold=0.5, distance_field=False):
         self._threshold = threshold
         self._map = self.convert(image_fn)
         self._shape = self._map.shape
         self.parse_free_conf()
+        if distance_field:
+            self.parse_distance_field()
+        else:
+            self._distance_field = None
 
     @property
     def map(self):
@@ -33,6 +37,14 @@ class ImageMap2D:
     @property
     def obstacle_conf(self):
         return self._obstacle_conf
+
+    @property
+    def distance_field(self):
+        return self._distance_field
+
+    @property
+    def distance_field_vec(self):
+        return self._distance_field_vec
 
     def convert(self, image_fn):
         image = Image.open(image_fn).convert("L")
@@ -97,3 +109,46 @@ class ImageMap2D:
             return False
         else:
             return True
+
+    def nearest_obstacle(self, x, y):
+        if self.in_collision(x, y):
+            return 0.0, np.array([0.0, 0.0], dtype=np.float32)
+        radius = 0
+        found_obstacle = False
+        while not found_obstacle:
+            radius += 1
+            sweep_offset = list(range(-radius, radius + 1))
+            min_dist = np.sqrt(self.row ** 2 + self.col ** 2 + 1)
+            field_vec = None
+            for x_offset in [-radius, radius]:
+                for y_offset in sweep_offset:
+                    tmp_node = Node(x + x_offset, y + y_offset, None)
+                    if not self.in_range(tmp_node):
+                        continue
+                    if self.in_collision(x + x_offset, y + y_offset):
+                        found_obstacle = True
+                        dist = np.sqrt(x_offset ** 2 + y_offset ** 2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            field_vec = [x_offset, y_offset]
+            for y_offset in [-radius, radius]:
+                for x_offset in sweep_offset:
+                    tmp_node = Node(x + x_offset, y + y_offset, None)
+                    if not self.in_range(tmp_node):
+                        continue
+                    if self.in_collision(x + x_offset, y + y_offset):
+                        found_obstacle = True
+                        dist = np.sqrt(x_offset ** 2 + y_offset ** 2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            field_vec = [x_offset, y_offset]
+        return min_dist, np.array(field_vec, dtype=np.float32)
+
+    def parse_distance_field(self):
+        print("==> Parsing distance field")
+        self._distance_field = np.zeros(self._map.shape)
+        self._distance_field_vec = np.zeros(self._map.shape + (2,))
+        for x in range(self.row):
+            for y in range(self.col):
+                self._distance_field[x, y] = self.nearest_obstacle(x, y)[0]
+                self._distance_field_vec[x, y] = self.nearest_obstacle(x, y)[1]

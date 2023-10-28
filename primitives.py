@@ -1,3 +1,5 @@
+import numpy as np
+
 from utils import distance
 
 
@@ -47,3 +49,6 @@ class Node(object):
             return Node(other * self.x, other * self.y, None)
         else:
             raise TypeError("Unsupported operand type for multiplication")
+
+    def array(self):
+        return np.array([self.x, self.y], np.float32)

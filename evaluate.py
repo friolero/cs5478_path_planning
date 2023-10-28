@@ -2,10 +2,12 @@ import sys
 import time
 
 import numpy as np
+from tqdm import tqdm
+
 from apf_planner import ArtificialPotentialField as APF
+from chomp_planner import CHOMP
 from map import ImageMap2D
 from rrt_planners import RRT, BiRRT, RRTStar
-from tqdm import tqdm
 from utils import distance, set_seed, vis_path
 
 
@@ -80,7 +82,10 @@ class Evaluator:
 
 if __name__ == "__main__":
 
-    map = ImageMap2D("data/2d_maze_3.png")
+    map = ImageMap2D("data/2d_maze_2.png", distance_field=True)
+    import ipdb
+
+    ipdb.set_trace()
     evaluator = Evaluator(map, n_eval=10, seed=77)
 
     n_samples = 20000
@@ -96,6 +101,12 @@ if __name__ == "__main__":
             step_size=2.0,
             radius=5,
             auto_tune=False,
+        ),
+        "CHOMP": CHOMP(
+            max_iterations=1000,
+            n_waypoints=100,
+            grad_clip=10,
+            lr=0.01,
         ),
     }
 
