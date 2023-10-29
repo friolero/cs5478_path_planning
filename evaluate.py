@@ -40,7 +40,7 @@ class Evaluator:
 
             # calculation of curvature from the typical formula
             curvature = np.abs(dx * d2y - d2x * dy) / (dx * dx + dy * dy) ** 1.5
-            return curvature
+            return np.nan_to_num(curvature, nan=0.0)
 
         n_success = 0
         path_lengths = []
@@ -58,20 +58,28 @@ class Evaluator:
             time_taken.append(end_time - start_time)
             if success:
                 n_success += 1
-                path_lengths.append(len(path))
+                tmp_path_length = [
+                    distance(path[i], path[i + 1]) for i in range(len(path) - 1)
+                ]
+                path_lengths.append(sum(tmp_path_length))
                 curvature = cal_curvature(path)
                 mean_curvatures.append(curvature.mean())
                 max_curvatures.append(np.abs(curvature).max())
                 print(
                     f"        Success: {success}; path length: {path_lengths[-1]}; mean curvature: {mean_curvatures[-1]}; Time taken: {time_taken[-1]}s"
                 )
+            else:
+                print("Failed to find a path")
 
         results = {
             "success_rate": float(n_success) / len(self._eval_cases),
-            "avg_path_length": sum(path_lengths) / len(path_lengths),
-            "avg_curvature": sum(mean_curvatures) / len(mean_curvatures),
-            "max_curvature": sum(max_curvatures) / len(max_curvatures),
-            "time_taken": sum(time_taken) / len(time_taken),
+            "avg_path_length": (np.mean(path_lengths), np.std(path_lengths)),
+            "avg_curvature": (
+                np.mean(mean_curvatures),
+                np.std(mean_curvatures),
+            ),
+            # "max_curvature": sum(max_curvatures) / len(max_curvatures),
+            "time_taken": (np.mean(time_taken), np.std(time_taken)),
         }
         return results
 
@@ -82,10 +90,10 @@ class Evaluator:
 
 if __name__ == "__main__":
 
-    map = ImageMap2D("data/2d_maze_2.png")
+    # map = ImageMap2D("data/2d_maze_2.png")
     map = ImageMap2D("data/2d_map_4.png")
 
-    evaluator = Evaluator(map, n_eval=10, seed=77)
+    evaluator = Evaluator(map, n_eval=50, seed=77)
 
     n_samples = 20000
     delta_dist = int(min(map.row, map.col) / 50)
@@ -101,11 +109,9 @@ if __name__ == "__main__":
             radius=5,
             auto_tune=False,
         ),
-        "CHOMP": CHOMP(
-            max_iterations=1000, n_waypoints=100, grad_clip=10, lr=0.01
-        ),
+        "CHOMP": CHOMP(max_iterations=100, n_waypoints=64, grad_clip=10),
     }
 
-    results = evaluator(planners[sys.argv[1]], vis=True)
+    results = evaluator(planners[sys.argv[1]], vis=False)
     print("Overall results:")
     print(results)

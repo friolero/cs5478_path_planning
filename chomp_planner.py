@@ -3,8 +3,7 @@ import scipy
 
 from base_planner import BasePlanner
 from primitives import Node
-from utils import distance, knn, sort_with_distance
-from utils import vis_path
+from utils import distance, vis_path
 
 
 class CHOMP:
@@ -15,9 +14,9 @@ class CHOMP:
         n_waypoints=64,
         max_iterations=1000,
         lr=0.1,
-        grad_clip=30,
-        eps=3,
-        collision_weight=1,
+        grad_clip=20,
+        eps=1,
+        collision_weight=2,
         smooth_weight=1.0,
         dist_threshold=20,
         sigma_start_init=0.001,
@@ -253,8 +252,8 @@ class CHOMP:
             xi_ = xi_ - dxi * lr
             xi_ = self.clip(xi_, map)
             traj_history.append(xi_)
-            if (n_iter % 100) == 0:
-                vis_path(map, self.postprocess(map, traj_history[-1]))
+            # if (n_iter % 100) == 0:
+            #    vis_path(map, self.postprocess(map, traj_history[-1]))
 
             err = np.linalg.norm(dxi)
             if err >= last_err:
@@ -266,11 +265,12 @@ class CHOMP:
             last_err = err
 
             if err < self._dist_threshold:
+                success = True
                 break
-            else:
-                print(n_iter, lr, n_err_increase, err)
-        if (n_iter % 100) == 0:
-            vis_path(map, self.postprocess(map, traj_history[-1]))
+            # else:
+            #    print(n_iter, lr, n_err_increase, err)
+        # if (n_iter % 100) == 0:
+        #    vis_path(map, self.postprocess(map, traj_history[-1]))
         return self.postprocess(map, traj_history[-1]), success
 
 
