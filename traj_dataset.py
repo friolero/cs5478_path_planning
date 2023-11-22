@@ -1,5 +1,6 @@
-import abc
+import glob
 import os.path
+import pickle as pkl
 
 import einops
 import numpy as np
@@ -112,9 +113,9 @@ class DatasetNormalizer:
 
 
 class TrajectoryDatasetBase(Dataset):
-    def __init__(self, base_dir=None, normalizer="LimitsNormalizer"):
+    def __init__(self, data_dir=None, normalizer="LimitsNormalizer"):
 
-        # self._base_dir
+        self.data_dir = data_dir
 
         self.field_key_traj = "traj"
         self.field_key_task = "task"
@@ -136,8 +137,16 @@ class TrajectoryDatasetBase(Dataset):
         self.normalize_all_data(*self.normalizer_keys)
 
     def load_trajectories(self):
-        # TODO load free trajectories
-        # load trajs_free_l, n_trajs
+        # load free trajectories
+        n_trajs = 0
+        trajs_free_l = []
+        files = glob.glob(f"{self.data_dir}/*.pkl")
+        for fn in files:
+            with open(fn, "rb") as fp:
+                tmp_traj_data = pkl.load(fp)
+            tmp_traj_data = torch.from_numpy(tmp_traj_data).float()
+            n_trajs += tmp_traj_data.shape[0]
+            trajs_free_l.append(tmp_traj_data)
         trajs_free = torch.cat(trajs_free_l)
         self.fields[self.field_key_traj] = trajs_free
 
