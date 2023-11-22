@@ -33,13 +33,25 @@ parser.add_argument(
     "-n_task", type=int, default=500, help="total context number"
 )
 parser.add_argument(
+    "-max_plan_time", type=int, default=80, help="maximum secs to plan a task"
+)
+parser.add_argument(
     "-n_traj_per_task", type=int, default=20, help="trajectory per context"
 )
 args = parser.parse_args()
 
 
 class TrajectoryGenerator:
-    def __init__(self, map, out_dir, n_task, n_traj_per_task, n_parallel, seed):
+    def __init__(
+        self,
+        map,
+        out_dir,
+        n_task,
+        n_traj_per_task,
+        n_parallel,
+        max_plan_time,
+        seed,
+    ):
         self._seed = seed
         set_seed(self._seed)
 
@@ -60,6 +72,7 @@ class TrajectoryGenerator:
         self._tasks = [self.gen_random_configs() for _ in range(n_task)]
 
         self._n_parallel = n_parallel
+        self._max_plan_time = max_plan_time
 
     def gen_random_configs(self, min_dist=100):
         valid = False
@@ -84,6 +97,8 @@ class TrajectoryGenerator:
         start_time = time.time()
         while len(task_trajs) < self._n_traj_per_task:
             path, success = planner.plan(self._map, start_node, end_node)
+            if time.time() - start_time > self._max_plan_time:
+                break
             if not success:
                 continue
             elif len(path) < self._n_wps:
@@ -169,6 +184,7 @@ if __name__ == "__main__":
         n_task=args.n_task,
         n_traj_per_task=args.n_traj_per_task,
         n_parallel=args.n_parallel,
+        max_plan_time=args.max_plan_time,
         seed=args.seed,
     )
 
