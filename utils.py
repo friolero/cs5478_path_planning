@@ -42,6 +42,35 @@ def vis_path(map, path, r_p=1):
     vis_image.show()
 
 
+def save_vis_paths(map, paths, out_fn, r_p=1):
+
+    vis_image = deepcopy(map.map).astype(np.float32)
+    vis_image = vis_image[..., np.newaxis].repeat(3, axis=-1)
+
+    for path in paths:
+        start_node = path[0]
+        end_node = path[-1]
+        vis_image[
+            max(0, start_node[0] - r_p) : min(start_node[0] + r_p, map.row - 1),
+            max(0, start_node[1] - r_p) : min(start_node[1] + r_p, map.col - 1),
+        ] = [1.0, 0.0, 0.0]
+
+        rnd_color = np.random.uniform(0.0, 1.0, 3).tolist()
+        for i, node in enumerate(path[1:]):
+            vis_image[
+                max(0, node[0] - r_p) : min(node[0] + r_p, map.row - 1),
+                max(0, node[1] - r_p) : min(node[1] + r_p, map.col - 1),
+            ] = rnd_color
+
+        vis_image[
+            max(0, end_node[0] - r_p) : min(end_node[0] + r_p, map.row - 1),
+            max(0, end_node[1] - r_p) : min(end_node[1] + r_p, map.col - 1),
+        ] = [0.0, 0.0, 1.0]
+
+    vis_image = Image.fromarray((vis_image * 255.0).astype(np.uint8))
+    vis_image.save(out_fn)
+
+
 def distance(point_a, point_b):
     return np.linalg.norm([point_a.x - point_b.x, point_a.y - point_b.y])
 

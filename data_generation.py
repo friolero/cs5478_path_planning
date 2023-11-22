@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from map import ImageMap2D
 from rrt_planners import RRT, BiRRT, RRTStar
-from utils import distance, set_seed, vis_path
+from utils import distance, save_vis_paths, set_seed
 
 parser = argparse.ArgumentParser(description="Trajectory generation.")
 parser.add_argument("-seed", type=int, default=77, help="random seed")
@@ -34,9 +34,6 @@ parser.add_argument(
 )
 parser.add_argument(
     "-n_traj_per_task", type=int, default=20, help="trajectory per context"
-)
-parser.add_argument(
-    "-vis", action="store_true", default=False, help="visualize path generated"
 )
 args = parser.parse_args()
 
@@ -81,7 +78,7 @@ class TrajectoryGenerator:
         trajectory = trajectory[idx][np.newaxis, ...]
         return trajectory
 
-    def plan_single_config(self, planner, task_config, queue, config_idx, vis):
+    def plan_single_config(self, planner, task_config, queue, config_idx):
         start_node, end_node = task_config
         task_trajs = []
         start_time = time.time()
@@ -96,14 +93,12 @@ class TrajectoryGenerator:
                 path = self.postprocess(path)
             if success:
                 task_trajs.append(path)
-            if vis and (path is not None):
-                vis_path(self._map, path)
         end_time = time.time()
         print(f"[Task {config_idx}]: time taken: {end_time - start_time}s.")
         task_trajs = np.vstack(task_trajs)
         queue.put((config_idx, task_trajs))
 
-    def __call__(self, planner, vis=False):
+    def __call__(self, planner):
 
         queue = Queue()
         if self._n_parallel > 1:
@@ -124,7 +119,6 @@ class TrajectoryGenerator:
                                 self._tasks[config_idx],
                                 queue,
                                 config_idx,
-                                vis,
                             ),
                         )
                     )
@@ -132,6 +126,11 @@ class TrajectoryGenerator:
                     proc.start()
                 for proc in procs:
                     config_idx, task_trajs = queue.get()
+                    save_vis_paths(
+                        self._map,
+                        task_trajs,
+                        f"{self._out_dir}/task_{config_idx:04d}.png",
+                    )
                     with open(
                         f"{self._out_dir}/task_{config_idx:04d}.pkl", "wb"
                     ) as fp:
@@ -143,7 +142,7 @@ class TrajectoryGenerator:
             for config_idx in range(self._n_task):
                 print(f"==> Generating trajectory {config_idx}")
                 self.plan_single_config(
-                    planner, self._tasks[config_idx], queue, config_idx, vis
+                    planner, self._tasks[config_idx], queue, config_idx
                 )
                 config_idx, task_trajs = queue.get()
                 with open(
@@ -173,4 +172,4 @@ if __name__ == "__main__":
         seed=args.seed,
     )
 
-    trajs = generator(planners[args.planner], vis=args.vis)
+    trajs = generator(planners[args.planner])
