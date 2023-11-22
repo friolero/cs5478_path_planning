@@ -110,7 +110,10 @@ class TrajectoryGenerator:
                 task_trajs.append(path)
         end_time = time.time()
         print(f"[Task {config_idx}]: time taken: {end_time - start_time}s.")
-        task_trajs = np.vstack(task_trajs)
+        if len(task_trajs) > 0:
+            task_trajs = np.vstack(task_trajs)
+        else:
+            task_trajs = np.empty((1, self._n_wps, 2))
         queue.put((config_idx, task_trajs))
 
     def __call__(self, planner):
@@ -141,6 +144,8 @@ class TrajectoryGenerator:
                     proc.start()
                 for proc in procs:
                     config_idx, task_trajs = queue.get()
+                    if task_trajs.shape[0] < 5:
+                        continue
                     save_vis_paths(
                         self._map,
                         task_trajs,
