@@ -2,8 +2,7 @@ import numpy as np
 import scipy
 
 from base_planner import BasePlanner
-from primitives import Node
-from utils import distance, vis_path
+from utils import distance, vis_path, Node
 
 
 class CHOMP:

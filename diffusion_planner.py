@@ -3,7 +3,7 @@ import collections
 import torch
 from torch.utils.data import DataLoader, random_split
 
-from diffusion import GaussianDiffusion, GaussianDiffusionLoss, TemporalUnet
+from diffusion_model import GaussianDiffusion, GaussianDiffusionLoss, TemporalUnet
 from traj_dataset import TrajectoryDataset
 
 

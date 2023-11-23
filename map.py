@@ -1,7 +1,7 @@
 import numpy as np
 from PIL import Image
 
-from primitives import Node
+from utils import Node
 
 # class RandomMap2D:
 #    def __init__(self, size):

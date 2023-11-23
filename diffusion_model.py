@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from layers import (
+from diffusion_layers import (
     Conv1dBlock,
     Downsample1d,
     ResidualTemporalBlock,

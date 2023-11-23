@@ -1,8 +1,7 @@
 import numpy as np
 
 from base_planner import BasePlanner
-from primitives import Node
-from utils import distance
+from utils import distance, Node
 
 
 class ArtificialPotentialField(BasePlanner):
