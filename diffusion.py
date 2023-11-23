@@ -45,6 +45,22 @@ def make_timesteps(batch_size, i, device):
     return t
 
 
+def build_context(model, dataset, input_dict):
+    # input_dict is already normalized
+    context = None
+    if model.context_model is not None:
+        context = dict()
+        # (normalized) features of variable environments
+        if dataset.variable_environment:
+            env_normalized = input_dict[f"{dataset.field_key_env}_normalized"]
+            context["env"] = env_normalized
+
+        # tasks
+        task_normalized = input_dict[f"{dataset.field_key_task}_normalized"]
+        context["tasks"] = task_normalized
+    return context
+
+
 class WeightedLoss(nn.Module):
     def __init__(self, weights=None):
         super().__init__()
@@ -71,6 +87,27 @@ class WeightedL1(WeightedLoss):
 class WeightedL2(WeightedLoss):
     def _loss(self, pred, targ):
         return F.mse_loss(pred, targ, reduction="none")
+
+
+class GaussianDiffusionLoss:
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def loss_fn(diffusion_model, input_dict, dataset, step=None):
+        """
+        Loss function for training diffusion-based generative models.
+        """
+        traj_normalized = input_dict[f"{dataset.field_key_traj}_normalized"]
+
+        context = build_context(diffusion_model, dataset, input_dict)
+
+        hard_conds = input_dict.get("hard_conds", {})
+        loss, info = diffusion_model.loss(traj_normalized, context, hard_conds)
+
+        loss_dict = {"diffusion_loss": loss}
+
+        return loss_dict, info
 
 
 def cosine_beta_schedule(
@@ -699,21 +736,3 @@ class GaussianDiffusion(nn.Module):
             0, self.n_diffusion_steps, (batch_size,), device=x.device
         ).long()
         return self.p_losses(x, context, t, *args)
-
-
-if __name__ == "__main__":
-    unet = TemporalUnet(
-        n_support_points=64,
-        state_dim=2,
-        unet_input_dim=32,
-        dim_mults=(1, 2, 4, 8),
-    )
-    model = GaussianDiffusion(
-        model=unet,
-        variance_schedule="exponential",
-        n_diffusion_steps=25,
-        predict_epsilon=True,
-    )
-    import ipdb
-
-    ipdb.set_trace()
