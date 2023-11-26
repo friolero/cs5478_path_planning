@@ -1,6 +1,9 @@
 import random
 from copy import deepcopy
 
+import matplotlib.cm as cmx
+import matplotlib.colors as colors
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
@@ -47,28 +50,35 @@ def save_vis_paths(map, paths, out_fn, r_p=1):
     vis_image = deepcopy(map.map).astype(np.float32)
     vis_image = vis_image[..., np.newaxis].repeat(3, axis=-1)
 
+    jet = plt.get_cmap("jet")
+    color_norm = colors.Normalize(vmin=0, vmax=len(paths[0]))
+    scalar_map = cmx.ScalarMappable(norm=color_norm, cmap=jet)
+
     for path in paths:
         start_node = path[0]
         end_node = path[-1]
         vis_image[
             max(0, start_node[0] - r_p) : min(start_node[0] + r_p, map.row - 1),
             max(0, start_node[1] - r_p) : min(start_node[1] + r_p, map.col - 1),
-        ] = [1.0, 0.0, 0.0]
+        ] = [0.0, 0.0, 1.0]
 
-        rnd_color = np.random.uniform(0.0, 1.0, 3).tolist()
+        # rnd_color = np.random.uniform(0.0, 1.0, 3).tolist()
         for i, node in enumerate(path[1:]):
             vis_image[
                 max(0, node[0] - r_p) : min(node[0] + r_p, map.row - 1),
                 max(0, node[1] - r_p) : min(node[1] + r_p, map.col - 1),
-            ] = rnd_color
+            ] = scalar_map.to_rgba(i)[:3]
 
         vis_image[
             max(0, end_node[0] - r_p) : min(end_node[0] + r_p, map.row - 1),
             max(0, end_node[1] - r_p) : min(end_node[1] + r_p, map.col - 1),
-        ] = [0.0, 0.0, 1.0]
+        ] = [1.0, 0.0, 0.0]
 
     vis_image = Image.fromarray((vis_image * 255.0).astype(np.uint8))
-    vis_image.save(out_fn)
+    if out_fn is not None:
+        vis_image.save(out_fn)
+    else:
+        vis_image.show()
 
 
 def distance(point_a, point_b):
