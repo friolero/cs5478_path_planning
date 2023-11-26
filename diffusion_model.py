@@ -45,22 +45,6 @@ def make_timesteps(batch_size, i, device):
     return t
 
 
-def build_context(model, dataset, input_dict):
-    # input_dict is already normalized
-    context = None
-    if model.context_model is not None:
-        context = dict()
-        # (normalized) features of variable environments
-        if dataset.variable_environment:
-            env_normalized = input_dict[f"{dataset.field_key_env}_normalized"]
-            context["env"] = env_normalized
-
-        # tasks
-        task_normalized = input_dict[f"{dataset.field_key_task}_normalized"]
-        context["tasks"] = task_normalized
-    return context
-
-
 class WeightedLoss(nn.Module):
     def __init__(self, weights=None):
         super().__init__()
@@ -100,10 +84,8 @@ class GaussianDiffusionLoss:
         """
         traj_normalized = input_dict[f"{dataset.field_key_traj}_normalized"]
 
-        context = build_context(diffusion_model, dataset, input_dict)
-
         hard_conds = input_dict.get("hard_conds", {})
-        loss, info = diffusion_model.loss(traj_normalized, context, hard_conds)
+        loss, info = diffusion_model.loss(traj_normalized, None, hard_conds)
 
         loss_dict = {"diffusion_loss": loss}
 
@@ -637,7 +619,7 @@ class GaussianDiffusion(nn.Module):
         return self.p_sample_loop(shape, hard_conds, **sample_kwargs)
 
     def forward(self, cond, *args, **kwargs):
-        raise NotImplementedError
+        # raise NotImplementedError
         return self.conditional_sample(cond, *args, **kwargs)
 
     @torch.no_grad()
@@ -736,3 +718,23 @@ class GaussianDiffusion(nn.Module):
             0, self.n_diffusion_steps, (batch_size,), device=x.device
         ).long()
         return self.p_losses(x, context, t, *args)
+
+    def plan(self, map, start_node, end_node, dataset, n_samples):
+        traj = torch.Tensor(
+            [[start_node.x, start_node.y], [end_node.x, end_node.y]]
+        ).float()
+        hard_conds = dataset.get_hard_conditions(traj, normalize=True)
+        with torch.no_grad():
+            self.eval()
+            paths_normalized = self.run_inference(
+                context=None,
+                hard_conds=hard_conds,
+                n_samples=n_samples,
+                horizon=dataset.n_support_points,
+                return_chain=False,
+                # n_diffusion_steps_without_noises=5,
+            )
+            paths = dataset.unnormalize_trajectories(paths_normalized.cpu())
+            paths = [path.astype(int).tolist() for path in paths.numpy()]
+
+        return paths
