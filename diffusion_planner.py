@@ -15,7 +15,7 @@ from traj_dataset import TrajectoryDataset
 from utils import save_vis_paths
 
 
-# I haven't modified the code
+# I didn't modify the code
 # But I added some comments where it might be possible to optimize
 
 
