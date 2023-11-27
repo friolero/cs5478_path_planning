@@ -15,6 +15,11 @@ from traj_dataset import TrajectoryDataset
 from utils import save_vis_paths
 
 
+# I haven't modified the code
+# But I added some comments where it might be possible to optimize
+
+
+# Move dictionary items 2 a specified device
 def dict_to_device(ob, device):
     if isinstance(ob, collections.Mapping):
         return {k: dict_to_device(v, device) for k, v in ob.items()}
@@ -40,7 +45,6 @@ def test(planner, map, dataset, out_fn, n_samples=5):
     valid_paths = [exam_validity(map, path) for path in paths]
     return paths, valid_paths
 
-
 def train(
     planner,
     dataset,
@@ -59,8 +63,9 @@ def train(
     val_dataloader = DataLoader(val_dataset, batch_size=batch_size)
     num_epochs = int(num_train_steps * batch_size / len(train_dataset))
 
+    # Loop through epochs
     for epoch in range(num_epochs):
-        planner.train()
+        planner.train() # Training mode planner
         for idx, batch in enumerate(train_dataloader):
             batch = dict_to_device(batch, device)
             train_loss_dict, train_loss_info = criterion(
@@ -74,6 +79,7 @@ def train(
                 print_str += f"{name} - {single_loss}, "
             print(print_str[:-2])
 
+            # Backpropagation and optimization
             optimizer.zero_grad()
             train_loss_value.backward()
             torch.nn.utils.clip_grad_norm_(planner.parameters(), max_norm=1.0)
@@ -88,12 +94,15 @@ def train(
                 )
                 val_loss_value = 0.0
                 print_str = f"Eval batch [{idx}]: "
+
+                # Validation losses
                 for name, loss in val_loss_dict.items():
                     single_loss = loss.mean()
                     val_loss_value += single_loss
                     print_str += f"{name} - {single_loss}, "
             print(print_str[:-2])
 
+        # Test the planner on a few random scenarios
         for test_idx in n_test:
             out_fn = f"{vis_out_dir}/{epoch:09d}_{test_idx:02d}.png"
             _, _ = test(planner, map, dataset, out_fn)
@@ -108,12 +117,26 @@ if __name__ == "__main__":
     num_train_steps = 500000
     n_test = 1
     vis_out_dir = "vis/diffusion"
+
+    # If not exit, create output directory
     if not os.path.isdir(vis_out_dir):
         os.system(f"mkdir -p {vis_out_dir}")
+        # This is a linux command which cannot be used on Windows
+        # For me, I may use it to instead:
+        # os.makedirs(vis_out_dir, exist_ok=True)
+        # But it doesn't matter now
+        # (ಡωಡ)hiahiahia
+
+    # Choose GPU / CPU
+    # tbh, linux NVIDIA driver is really difficult to install
+    # So NVIDIA, fk U (Linus Voice)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # Load map and trajectory dataset
     map = ImageMap2D("data/2d_maze_2.png")
     dataset = TrajectoryDataset(data_dir="data/traj_data/BiRRT")
+
+    # Create and initialize the planner model and optimizer
     unet = TemporalUnet(
         n_support_points=n_support_points,
         state_dim=2,
@@ -127,8 +150,12 @@ if __name__ == "__main__":
         predict_epsilon=True,
     ).to(device)
     criterion = GaussianDiffusionLoss().loss_fn
+    # The torch.optim.AdamW optimizer is similar to Adam but incorporates weight decay directly
+    # AdamW = Adam + weight decate
+    # Emmm, Adam / AdamW, which is better?
     optimizer = torch.optim.Adam(lr=lr, params=planner.parameters())
 
+    # Check if the 'diffusion.pt' file exists, otherwise train the model
     ckpt_fn = "data/diffusion.pt"
     if not os.path.isfile(ckpt_fn):
         planner = train(
@@ -145,6 +172,7 @@ if __name__ == "__main__":
         )
         torch.save(planner, ckpt_fn)
     else:
+        # Load model and test it
         planner.model.load_state_dict(
             torch.load(ckpt_fn).model.to(device).state_dict()
         )
