@@ -1,3 +1,4 @@
+import collections
 import random
 from copy import deepcopy
 
@@ -100,6 +101,22 @@ def knn(node, neighbor_nodes, k):
     nearest_indices = np.argsort(dists, axis=-1).tolist()
     nearest_dists = [dists[idx] for idx in nearest_indices]
     return nearest_indices[:k], nearest_dists[:k]
+
+
+def dict_to_device(ob, device):
+    if isinstance(ob, collections.Mapping):
+        return {k: dict_to_device(v, device) for k, v in ob.items()}
+    else:
+        return ob.to(device)
+
+
+def exam_validity(map, path):
+    in_collision = False
+    for wp in path:
+        if map.in_collision(wp[0], wp[1]):
+            in_collision = True
+            break
+    return not in_collision
 
 
 class Node(object):

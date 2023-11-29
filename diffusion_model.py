@@ -718,23 +718,3 @@ class GaussianDiffusion(nn.Module):
             0, self.n_diffusion_steps, (batch_size,), device=x.device
         ).long()
         return self.p_losses(x, context, t, *args)
-
-    def plan(self, map, start_node, end_node, dataset, n_samples):
-        traj = torch.Tensor(
-            [[start_node.x, start_node.y], [end_node.x, end_node.y]]
-        ).float()
-        hard_conds = dataset.get_hard_conditions(traj, normalize=True)
-        with torch.no_grad():
-            self.eval()
-            paths_normalized = self.run_inference(
-                context=None,
-                hard_conds=hard_conds,
-                n_samples=n_samples,
-                horizon=dataset.n_support_points,
-                return_chain=False,
-                # n_diffusion_steps_without_noises=5,
-            )
-            paths = dataset.unnormalize_trajectories(paths_normalized.cpu())
-            paths = [path.astype(int).tolist() for path in paths.numpy()]
-
-        return paths
