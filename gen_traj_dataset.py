@@ -185,7 +185,7 @@ if __name__ == "__main__":
     }
     generator = TrajectoryGenerator(
         map,
-        out_dir=f"{args.out_dir}/{args.planner}",
+        out_dir=f"{args.out_dir}/{args.map_fn.split('/')[-1].split('.')[0]}_{args.planner}",
         n_task=args.n_task,
         n_traj_per_task=args.n_traj_per_task,
         n_parallel=args.n_parallel,

@@ -27,7 +27,7 @@ class DiffusionPlanner(BasePlanner):
         n_diffusion_steps=25,
         predict_epsilon=True,
         pretrained_fn="",
-        data_dir="data/traj_data/BiRRT",
+        data_dir="",
         device=torch.device("cuda"),
         **kwargs,
     ):
@@ -42,6 +42,7 @@ class DiffusionPlanner(BasePlanner):
         self._n_diffusion_steps = n_diffusion_steps
         self._predict_epsilon = predict_epsilon
 
+        assert os.path.isdir(data_dir), "Please provide a valid data directory."
         self._dataset = TrajectoryDataset(data_dir=data_dir)
 
         self.unet = TemporalUnet(
@@ -383,7 +384,8 @@ class CollisionCostGuide:
 if __name__ == "__main__":
 
     ckpt_fn = "data/diffusion.pt"
-    data_dir = "data/traj_data/BiRRT"
+    map_fn = "data/2d_maze_2.png"
+    data_dir = f"data/traj_data/{map_fn.split('/')[-1].split('.')[0]}_BiRRT"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     planner = DiffusionPlanner(
         pretrained_fn=ckpt_fn, data_dir=data_dir, device=device
@@ -396,7 +398,7 @@ if __name__ == "__main__":
         planner.load(ckpt_fn)
 
     set_seed(77)
-    map = ImageMap2D("data/2d_maze_2.png")
+    map = ImageMap2D(map_fn)
     guide = CollisionCostGuide(map, planner.dataset)
     # planner.test(map, n_test=50, fn_prefix="final")
     for test_idx in range(50):
