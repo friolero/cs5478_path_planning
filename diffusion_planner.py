@@ -228,18 +228,6 @@ class CollisionCostGuide:
         self._guide_weight = guide_weight
         self.build_map_cost_grad(vis=vis)
 
-    def backup(self):
-        X = np.arange(-10, 10, 1)
-        Y = np.arange(-10, 10, 1)
-        U, V = np.meshgrid(X, Y)
-
-        fig, ax = plt.subplots()
-        q = ax.quiver(X, Y, U, V)
-        ax.quiverkey(
-            q, X=0.3, Y=1.1, U=10, label="Quiver key, length = 10", labelpos="E"
-        )
-        plt.show()
-
     def build_map_cost_grad(self, vis=False):
         self._map_col_cost = np.zeros((self._map.row, self._map.col), np.float)
         self._col_cost_grad = np.zeros(
