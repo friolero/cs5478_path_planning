@@ -348,6 +348,14 @@ class CollisionCostGuide:
         col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
         return (-1) * col_cost_grad
 
+    def smoothness_cost_grad(self, traj):
+
+        pos_diff = torch.diff(x, dim=1)
+        wp = wp.clone().cpu().numpy().astype(int)
+        col_cost_grad = torch.from_numpy(self._col_cost_grad[wp[0], wp[1]])
+        col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
+        return (-1) * col_cost_grad
+
     def __call__(self, x, interpolate=False):
         unnormalized_x = self._dataset.unnormalize_trajectories(x.clone().cpu())
         traj_cost_grads = []
@@ -383,9 +391,10 @@ class CollisionCostGuide:
 
 if __name__ == "__main__":
 
-    ckpt_fn = "data/diffusion.pt"
     map_fn = "data/2d_maze_2.png"
-    data_dir = f"data/traj_data/{map_fn.split('/')[-1].split('.')[0]}_BiRRT"
+    prefix = f"{map_fn.split('/')[-1].split('.')[0]}"
+    data_dir = f"data/traj_data/{prefix}_BiRRT"
+    ckpt_fn = f"data/{prefix}_diffusion.pt"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     planner = DiffusionPlanner(
         pretrained_fn=ckpt_fn, data_dir=data_dir, device=device
