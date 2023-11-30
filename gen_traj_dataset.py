@@ -24,7 +24,7 @@ parser.add_argument(
     "-map_fn", type=str, default="data/2d_maze_2.png", help="2d map filename"
 )
 parser.add_argument(
-    "-planner", type=str, default="BiRRT", choices=["RRT", "BiRRRT", "RRTStar"]
+    "-planner", type=str, default="BiRRT", choices=["RRT", "BiRRT", "RRTStar"]
 )
 parser.add_argument(
     "-n_samples", type=int, default=20000, help="sample numbers for planner"
