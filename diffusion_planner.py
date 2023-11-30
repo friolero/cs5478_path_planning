@@ -222,11 +222,20 @@ class DiffusionPlanner(BasePlanner):
 
 
 class CollisionCostGuide:
-    def __init__(self, map, dataset, guide_weight=0.1, tol_radius=5, vis=False):
+    def __init__(
+        self,
+        map,
+        dataset,
+        smooth_guide_weight=0.05,
+        col_guide_weight=0.1,
+        tol_radius=5,
+        vis=False,
+    ):
         self._map = map
         self._dataset = dataset
         self._tol_radius = tol_radius
-        self._guide_weight = guide_weight
+        self._smooth_guide_weight = smooth_guide_weight
+        self._col_guide_weight = col_guide_weight
         self.build_map_cost_grad(vis=vis)
 
     def build_map_cost_grad(self, vis=False):
@@ -348,20 +357,22 @@ class CollisionCostGuide:
         col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
         return (-1) * col_cost_grad
 
-    def smoothness_cost_grad(self, traj):
-
+    def smoothness_cost_grad(self, x):
         pos_diff = torch.diff(x, dim=1)
-        wp = wp.clone().cpu().numpy().astype(int)
-        col_cost_grad = torch.from_numpy(self._col_cost_grad[wp[0], wp[1]])
-        col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
-        return (-1) * col_cost_grad
+        return (-1.0) * pos_diff ** 2
 
     def __call__(self, x, interpolate=False):
         unnormalized_x = self._dataset.unnormalize_trajectories(x.clone().cpu())
-        traj_cost_grads = []
+        unnormalized_x[:, :, 0] = torch.clip(
+            unnormalized_x[:, :, 0], min=0, max=self._map.row - 1
+        )
+        unnormalized_x[:, :, 1] = torch.clip(
+            unnormalized_x[:, :, 1], min=0, max=self._map.col - 1
+        )
+        col_cost_grads = []
         for i in range(x.shape[0]):
             if interpolate:
-                traj_cost_grads.append(
+                col_cost_grads.append(
                     torch.cat(
                         [
                             self.line_cost_grad(
@@ -374,7 +385,7 @@ class CollisionCostGuide:
                     )
                 )
             else:
-                traj_cost_grads.append(
+                col_cost_grads.append(
                     torch.cat(
                         [
                             self.grid_cost_grad(unnormalized_x[0][i])
@@ -383,15 +394,22 @@ class CollisionCostGuide:
                         1,
                     )
                 )
-            traj_cost_grads[-1][0][0].fill_(0)
-            traj_cost_grads[-1][0][-1].fill_(0)
-        traj_cost_grads = torch.cat(traj_cost_grads, 0).to(x.device)
-        return self._guide_weight * traj_cost_grads
+            col_cost_grads[-1][0][0].fill_(0)
+            col_cost_grads[-1][0][-1].fill_(0)
+        col_cost_grads = torch.cat(col_cost_grads, 0).to(x.device)
+        # col_cost_grads = torch.zeros_like(col_cost_grads)
+        smooth_cost_grads = torch.zeros_like(col_cost_grads)
+        smooth_cost_grads[:, 1:-1, :] = self.smoothness_cost_grad(x)[:, 1:, :]
+        return (
+            self._col_guide_weight * col_cost_grads
+            + self._smooth_guide_weight * smooth_cost_grads
+        )
 
 
 if __name__ == "__main__":
 
     map_fn = "data/2d_maze_2.png"
+    # map_fn = "data/2d_map_4.png"
     prefix = f"{map_fn.split('/')[-1].split('.')[0]}"
     data_dir = f"data/traj_data/{prefix}_BiRRT"
     ckpt_fn = f"data/{prefix}_diffusion.pt"
