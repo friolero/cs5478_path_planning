@@ -110,9 +110,45 @@ class ImageMap2D:
         else:
             return True
 
+    def nearest_freespace(self, x, y):
+        assert self.in_collision(
+            x, y
+        ), "Only check nearest freespace for obstacle node"
+        radius = 0
+        found_freespace = False
+        while not found_freespace:
+            radius += 1
+            sweep_offset = list(range(-radius, radius + 1))
+            min_dist = np.sqrt(self.row ** 2 + self.col ** 2 + 1)
+            field_vec = None
+            for x_offset in [-radius, radius]:
+                for y_offset in sweep_offset:
+                    tmp_node = Node(x + x_offset, y + y_offset, None)
+                    if not self.in_range(tmp_node):
+                        continue
+                    if not self.in_collision(x + x_offset, y + y_offset):
+                        found_freespace = True
+                        dist = np.sqrt(x_offset ** 2 + y_offset ** 2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            field_vec = [x_offset, y_offset]
+            for y_offset in [-radius, radius]:
+                for x_offset in sweep_offset:
+                    tmp_node = Node(x + x_offset, y + y_offset, None)
+                    if not self.in_range(tmp_node):
+                        continue
+                    if not self.in_collision(x + x_offset, y + y_offset):
+                        found_freespace = True
+                        dist = np.sqrt(x_offset ** 2 + y_offset ** 2)
+                        if dist < min_dist:
+                            min_dist = dist
+                            field_vec = [x_offset, y_offset]
+        return min_dist, np.array(field_vec, dtype=np.float32)
+
     def nearest_obstacle(self, x, y):
         if self.in_collision(x, y):
-            return 0.0, np.array([0.0, 0.0], dtype=np.float32)
+            min_dist, field_vec = self.nearest_freespace(x, y)
+            return -min_dist, -field_vec
         radius = 0
         found_obstacle = False
         while not found_obstacle:

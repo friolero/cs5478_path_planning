@@ -1,6 +1,7 @@
 import math
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, random_split
@@ -13,7 +14,7 @@ from diffusion_model import (
 )
 from map import ImageMap2D
 from traj_dataset import TrajectoryDataset
-from utils import dict_to_device, exam_validity, save_vis_paths
+from utils import dict_to_device, exam_validity, save_vis_paths, set_seed
 
 
 class DiffusionPlanner(BasePlanner):
@@ -66,9 +67,7 @@ class DiffusionPlanner(BasePlanner):
         return self._dataset
 
     def load(self, ckpt_fn):
-        print(
-            f"==> Loaded pretrained checkpoint from {ckpt_fn}. Start testing..."
-        )
+        print(f"==> Loaded pretrained checkpoint from {ckpt_fn}.")
         self.planner.model.load_state_dict(
             torch.load(ckpt_fn).model.to(self._device).state_dict()
         )
@@ -222,60 +221,171 @@ class DiffusionPlanner(BasePlanner):
 
 
 class CollisionCostGuide:
-    def __init__(self, mpa, dataset, guide_weight=1, tol_radius=5):
+    def __init__(self, map, dataset, guide_weight=0.1, tol_radius=5, vis=False):
         self._map = map
         self._dataset = dataset
         self._tol_radius = tol_radius
         self._guide_weight = guide_weight
+        self.build_map_cost_grad(vis=vis)
 
-    def d2c(self, dist):
-        return 1.0 / (2 * self._tol_radius) * (dist - self._tol_radius) ** 2
+    def backup(self):
+        X = np.arange(-10, 10, 1)
+        Y = np.arange(-10, 10, 1)
+        U, V = np.meshgrid(X, Y)
 
-    def potential_grad(self, dist, x, y):
-        if x < map.row - 1:
-            grad_x = self.d2c(
-                self._map.nearest_obstacle(x + 1, y)[0]
-            ) - self.d2c(dist)
-        else:
-            grad_x = self.d2c(dist) - self.d2c(
-                self._map.nearest_obstacle(x - 1, y)[0]
-            )
-        if y < self._map.col - 1:
-            grad_y = self.d2c(
-                self._map.nearest_obstacle(x, y + 1)[0]
-            ) - self.d2c(dist)
-        else:
-            grad_y = self.d2c(dist) - self.d2c(
-                self._map.nearest_obstacle(x, y - 1)[0]
-            )
-        return np.array([grad_x, grad_y], dtype=np.float32)
+        fig, ax = plt.subplots()
+        q = ax.quiver(X, Y, U, V)
+        ax.quiverkey(
+            q, X=0.3, Y=1.1, U=10, label="Quiver key, length = 10", labelpos="E"
+        )
+        plt.show()
+
+    def build_map_cost_grad(self, vis=False):
+        self._map_col_cost = np.zeros((self._map.row, self._map.col), np.float)
+        self._col_cost_grad = np.zeros(
+            (self._map.row, self._map.col, 2), np.float
+        )
+
+        for i in range(self._map.row):
+            for j in range(self._map.col):
+                dist, curr2obs_vec = self._map.nearest_obstacle(i, j)
+                coll_cost = max(self._tol_radius - dist, 0)
+                self._map_col_cost[i, j] = coll_cost
+        self._col_cost_grad = self.finite_difference(self._map_col_cost)
+        if vis:
+            plt.imshow(self._map_col_cost)
+            r, c = self._col_cost_grad.shape[:2]
+            Y, X = np.mgrid[0:r, 0:c]
+            dy = self._col_cost_grad[..., 0]
+            dx = -self._col_cost_grad[..., 1]
+
+            n = 2
+            plt.quiver(X[::n, ::n], Y[::n, ::n], dx[::n, ::n], dy[::n, ::n])
+            plt.show()
+
+    def finite_difference(self, value):
+        grad = np.zeros(value.shape + (len(value.shape),))
+
+        for i in range(value.shape[0]):
+            max_j = value.shape[1] - 1
+            if i == 0:
+                grad[i, 0] = [
+                    value[i + 1, 0] - value[i, 0],
+                    value[i, 1] - value[i, 0],
+                ]
+                grad[i, max_j] = [
+                    value[i + 1, max_j] - value[i, max_j],
+                    value[i, max_j] - value[i, max_j - 1],
+                ]
+            elif i == (value.shape[0] - 1):
+                grad[i, 0] = [
+                    value[i, 0] - value[i - 1, 0],
+                    value[i, 1] - value[i, 0],
+                ]
+                grad[i, max_j] = [
+                    value[i, max_j] - value[i - 1, max_j],
+                    value[i, max_j] - value[i, max_j - 1],
+                ]
+            else:
+                grad[i, 0] = [
+                    (value[i + 1, 0] - value[i - 1, 0]) / 2,
+                    value[i, 1] - value[i, 0],
+                ]
+                grad[i, max_j] = [
+                    (value[i + 1, max_j] - value[i - 1, max_j]) / 2,
+                    value[i, max_j] - value[i, max_j - 1],
+                ]
+
+        for j in range(value.shape[1]):
+            max_i = value.shape[0] - 1
+            if j == 0:
+                grad[0, j] = [
+                    value[1, j] - value[0, j],
+                    value[0, j + 1] - value[0, j],
+                ]
+                grad[max_i, j] = [
+                    value[max_i, j] - value[max_i - 1, j],
+                    value[max_i, j + 1] - value[max_i, j],
+                ]
+            elif j == (value.shape[1] - 1):
+                grad[0, j] = [
+                    value[1, j] - value[0, j],
+                    value[0, j] - value[0, j - 1],
+                ]
+                grad[max_i, j] = [
+                    value[max_i, j] - value[max_i - 1, j],
+                    value[max_i, j] - value[max_i, j - 1],
+                ]
+            else:
+                grad[0, j] = [
+                    value[1, j] - value[0, j],
+                    (value[0, j + 1] - value[0, j - 1]) / 2,
+                ]
+                grad[max_i, j] = [
+                    value[max_i, j] - value[max_i - 1, j],
+                    (value[max_i, j + 1] - value[max_i, j - 1]) / 2,
+                ]
+
+        for i in range(1, value.shape[0] - 2):
+            for j in range(1, value.shape[1] - 2):
+                grad[i, j] = [
+                    (value[i + 1, j] - value[i - 1, j]) / 2,
+                    (value[i, j + 1] - value[i, j - 1]) / 2,
+                ]
+        return grad
 
     def grid_cost_grad(self, wp):
         wp = wp.clone().cpu().numpy().astype(int)
-        dist, delta_cost = self._map.nearest_obstacle(wp[0], wp[1])
-        if dist <= self._tol_radius:
-            cost_grad = self.potential_grad(dist, wp[0], wp[1])
-        else:
-            cost_grad = np.zeros(2)
-        cost_grad = (
-            torch.from_numpy(cost_grad).float().unsqueeze(0).unsqueeze(1)
-        )
-        cost_grad.fill_(0)
-        return (-1) * cost_grad
+        col_cost_grad = torch.from_numpy(self._col_cost_grad[wp[0], wp[1]])
+        col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
+        return (-1) * col_cost_grad
 
-    def __call__(self, x):
+    def line_cost_grad(self, wp_1, wp_2):
+        x1, y1 = wp_1.clone().cpu().numpy().astype(int).tolist()
+        x2, y2 = wp_2.clone().cpu().numpy().astype(int).tolist()
+
+        n_check = max(abs(x2 - x1), abs(y2 - y1))
+        if n_check == 0:
+            col_cost_grad = self._col_cost_grad[x1, y1]
+        else:
+            col_cost_grad = np.zeros(2)
+            step_size = (float(x2 - x1) / n_check, float(y2 - y1) / n_check)
+            for i in range(n_check):
+                tmp_x = int(x1 + (i + 1) * step_size[0])
+                tmp_y = int(y1 + (i + 1) * step_size[1])
+                col_cost_grad += self._col_cost_grad[tmp_x, tmp_y]
+            col_cost_grad /= n_check
+        col_cost_grad = torch.from_numpy(col_cost_grad)
+        col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
+        return (-1) * col_cost_grad
+
+    def __call__(self, x, interpolate=False):
         unnormalized_x = self._dataset.unnormalize_trajectories(x.clone().cpu())
         traj_cost_grads = []
         for i in range(x.shape[0]):
-            traj_cost_grads.append(
-                torch.cat(
-                    [
-                        self.grid_cost_grad(unnormalized_x[0][i])
-                        for i in range(x.shape[1])
-                    ],
-                    1,
+            if interpolate:
+                traj_cost_grads.append(
+                    torch.cat(
+                        [
+                            self.line_cost_grad(
+                                unnormalized_x[0][i],
+                                unnormalized_x[0][min(x.shape[1] - 1, i + 1)],
+                            )
+                            for i in range(x.shape[1])
+                        ],
+                        1,
+                    )
                 )
-            )
+            else:
+                traj_cost_grads.append(
+                    torch.cat(
+                        [
+                            self.grid_cost_grad(unnormalized_x[0][i])
+                            for i in range(x.shape[1])
+                        ],
+                        1,
+                    )
+                )
             traj_cost_grads[-1][0][0].fill_(0)
             traj_cost_grads[-1][0][-1].fill_(0)
         traj_cost_grads = torch.cat(traj_cost_grads, 0).to(x.device)
@@ -297,16 +407,25 @@ if __name__ == "__main__":
     else:
         planner.load(ckpt_fn)
 
+    set_seed(77)
     map = ImageMap2D("data/2d_maze_2.png")
+    guide = CollisionCostGuide(map, planner.dataset)
     # planner.test(map, n_test=50, fn_prefix="final")
     for test_idx in range(50):
         start_node, end_node = np.random.choice(map.free_conf, size=2)
-        guide = CollisionCostGuide(map, planner.dataset)
-        paths = planner.guided_plan(
-            map, start_node, end_node, guide, unnormalize=True, n_samples=5
+        paths = planner.plan(
+            map, start_node, end_node, unnormalize=True, n_samples=1
         )
         valid_paths = [exam_validity(map, path) for path in paths]
         save_vis_paths(map, paths, out_fn=None)
-        input(
-            f"[{test_idx}]: start position [{paths[0][0][0]}, {paths[0][0][1]}], end position [{paths[0][-1][0]}, {paths[0][-1][1]}], {sum(valid_paths)} / {len(valid_paths)} valid path planned.\nPress enter to continue."
+        input("unguided path")
+        guided_paths = planner.guided_plan(
+            map, start_node, end_node, guide, unnormalize=True, n_samples=1
         )
+        # BUGGY validity. Didn't check interpolated line but point only
+        valid_paths = [exam_validity(map, path) for path in guided_paths]
+        save_vis_paths(map, guided_paths, out_fn=None)
+        input("guided path")
+        # input(
+        #    f"[{test_idx}]: start position [{paths[0][0][0]}, {paths[0][0][1]}], end position [{paths[0][-1][0]}, {paths[0][-1][1]}], {sum(valid_paths)} / {len(valid_paths)} valid path planned.\nPress enter to continue."
+        # )
