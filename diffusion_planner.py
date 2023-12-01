@@ -16,6 +16,8 @@ from map import ImageMap2D
 from traj_dataset import TrajectoryDataset
 from utils import dict_to_device, exam_validity, save_vis_paths, set_seed
 
+import time
+
 
 class DiffusionPlanner(BasePlanner):
     def __init__(
@@ -62,6 +64,29 @@ class DiffusionPlanner(BasePlanner):
         self._pretrained_fn = pretrained_fn
         if os.path.isfile(self._pretrained_fn):
             self.load(self._pretrained_fn)
+            
+    def calculate_path_metrics(self, path):
+            def cal_curvature(path):
+                data = np.vstack([(wp[0], wp[1]) for wp in path])
+
+                # first derivatives
+                dx = np.gradient(data[:, 0])
+                dy = np.gradient(data[:, 1])
+
+                # second derivatives
+                d2x = np.gradient(dx)
+                d2y = np.gradient(dy)
+
+                # calculation of curvature from the typical formula
+                curvature = np.abs(dx * d2y - d2x * dy) / (dx * dx + dy * dy) ** 1.5
+                return np.nan_to_num(curvature, nan=0.0)
+
+            path_length = sum([np.linalg.norm(np.array(path[i + 1]) - np.array(path[i])) for i in range(len(path) - 1)])
+            curvature = cal_curvature(path)
+            mean_curvature = curvature.mean()
+            max_curvature = np.abs(curvature).max()
+
+            return path_length, mean_curvature, max_curvature
 
     @property
     def dataset(self):
@@ -220,6 +245,8 @@ class DiffusionPlanner(BasePlanner):
             total_valid_paths.append(valid_paths)
         return total_paths, total_valid_paths
 
+        
+
 
 class CollisionCostGuide:
     def __init__(
@@ -336,19 +363,36 @@ if __name__ == "__main__":
     # planner.test(map, n_test=50, fn_prefix="final")
     for test_idx in range(50):
         start_node, end_node = np.random.choice(map.free_conf, size=2)
+
+        unguided_start_time = time.time()
         paths = planner.plan(
             map, start_node, end_node, unnormalize=True, n_samples=1
         )
+        unguided_end_time = time.time()
+        unguided_time = unguided_end_time - unguided_start_time
+        
         valid_paths = [exam_validity(map, path) for path in paths]
         save_vis_paths(map, paths, out_fn=None)
         input("unguided path")
+        for path in paths:
+            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(path)
+            print(f"Path Length: {path_length}, Mean Curvature: {mean_curvature}, Max Curvature: {max_curvature}, Time Taken: {unguided_time}")
+        
+        guided_start_time = time.time()
         guided_paths = planner.guided_plan(
             map, start_node, end_node, guide, unnormalize=True, n_samples=1
         )
+        guided_end_time = time.time()
+        guided_time = guided_end_time - guided_start_time
+
+
         # BUGGY validity. Didn't check interpolated line but point only
         valid_paths = [exam_validity(map, path) for path in guided_paths]
         save_vis_paths(map, guided_paths, out_fn=None)
         input("guided path")
+        for path in guided_paths:
+            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(path)
+            print(f"Path Length: {path_length}, Mean Curvature: {mean_curvature}, Max Curvature: {max_curvature}, Time Taken: {guided_time}")
         # input(
         #    f"[{test_idx}]: start position [{paths[0][0][0]}, {paths[0][0][1]}], end position [{paths[0][-1][0]}, {paths[0][-1][1]}], {sum(valid_paths)} / {len(valid_paths)} valid path planned.\nPress enter to continue."
         # )
