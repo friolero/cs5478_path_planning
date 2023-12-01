@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 
 from base_planner import BasePlanner
-from utils import distance, vis_path, Node
+from utils import Node, distance, vis_path
 
 
 class CHOMP:
@@ -14,7 +14,7 @@ class CHOMP:
         max_iterations=1000,
         lr=0.1,
         grad_clip=20,
-        eps=1,
+        eps=5,
         collision_weight=2,
         smooth_weight=1.0,
         dist_threshold=20,
@@ -165,30 +165,6 @@ class CHOMP:
             )
         return updated_traj
 
-    def d2c(self, dist, tol_radius=3):
-        return (
-            self._collision_weight / (2 * tol_radius) * (dist - tol_radius) ** 2
-        )
-
-    def potential_grad(self, dist, x, y, map):
-        if x < map.row - 1:
-            grad_x = self.d2c(map.nearest_obstacle(x + 1, y)[0]) - self.d2c(
-                dist
-            )
-        else:
-            grad_x = self.d2c(dist) - self.d2c(
-                map.nearest_obstacle(x - 1, y)[0]
-            )
-        if y < map.col - 1:
-            grad_y = self.d2c(map.nearest_obstacle(x, y + 1)[0]) - self.d2c(
-                dist
-            )
-        else:
-            grad_y = self.d2c(dist) - self.d2c(
-                map.nearest_obstacle(x, y - 1)[0]
-            )
-        return np.array([grad_x, grad_y], dtype=np.float32)
-
     def plan(self, map, start_node, end_node, return_history=False):
 
         AA_, bb_ = self.get_ab_mat(start_node, end_node)
@@ -230,16 +206,12 @@ class CHOMP:
                 prj = np.eye(2) - xdn @ xdn.T
                 kappa = prj @ xdd / vel ** 2
 
-                dist, delta_cost = map.nearest_obstacle(
-                    int(xi_[i][0]), int(xi_[i][1])
-                )
-
-                if dist < self._eps:
-                    cost = self.d2c(dist, tol_radius=self._eps)
-                    delta_cost = self.potential_grad(
-                        dist, int(xi_[i][0]), int(xi_[i][1]), map
-                    )
-                    nabla_obs[i] = J.T * vel @ (prj @ delta_cost - cost * kappa)
+                cost = map.col_cost[int(xi_[i][0]), int(xi_[i][1])]
+                if cost > 0:
+                    cost_grad = map.col_cost_grad[
+                        int(xi_[i][0]), int(xi_[i][1])
+                    ]
+                    nabla_obs[i] = J.T * vel @ (prj @ cost_grad - cost * kappa)
 
             dxi = Ainv_ @ (
                 nabla_obs.reshape(-1) + self._smooth_weight * nabla_smooth
@@ -251,8 +223,8 @@ class CHOMP:
             xi_ = xi_ - dxi * lr
             xi_ = self.clip(xi_, map)
             traj_history.append(xi_)
-            # if (n_iter % 100) == 0:
-            #    vis_path(map, self.postprocess(map, traj_history[-1]))
+            if (n_iter % 100) == 0:
+                vis_path(map, self.postprocess(map, traj_history[-1]))
 
             err = np.linalg.norm(dxi)
             if err >= last_err:
@@ -266,10 +238,10 @@ class CHOMP:
             if err < self._dist_threshold:
                 success = True
                 break
-            # else:
-            #    print(n_iter, lr, n_err_increase, err)
-        # if (n_iter % 100) == 0:
-        #    vis_path(map, self.postprocess(map, traj_history[-1]))
+            else:
+                print(n_iter, lr, n_err_increase, err)
+        if (n_iter % 100) == 0:
+            vis_path(map, self.postprocess(map, traj_history[-1]))
         return self.postprocess(map, traj_history[-1]), success
 
 
@@ -277,12 +249,15 @@ if __name__ == "__main__":
     from map import ImageMap2D
     from utils import vis_path
 
+    chomp = CHOMP()
+
     map = ImageMap2D("data/2d_map_4.png")  # , distance_field=True)
+    map = ImageMap2D("data/2d_maze_2.png")  # , distance_field=True)
+    map.build_map_cost_grad(tol_radius=chomp._eps)
+
     start_node, end_node = np.random.choice(
         map.free_conf, size=2, replace=False
     )
-
-    chomp = CHOMP()
     path, success = chomp.plan(map, start_node, end_node, return_history=True)
     import ipdb
 
