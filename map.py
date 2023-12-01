@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
@@ -188,3 +189,105 @@ class ImageMap2D:
             for y in range(self.col):
                 self._distance_field[x, y] = self.nearest_obstacle(x, y)[0]
                 self._distance_field_vec[x, y] = self.nearest_obstacle(x, y)[1]
+
+    def build_map_cost_grad(self, tol_radius, vis=False):
+        print("==> Building map costs and cost gradients...")
+        self._col_cost = np.zeros((self.row, self.col), np.float)
+        self._col_cost_grad = np.zeros((self.row, self.col, 2), np.float)
+
+        for i in range(self.row):
+            for j in range(self.col):
+                dist, curr2obs_vec = self.nearest_obstacle(i, j)
+                col_cost = max(tol_radius - dist, 0)
+                self._col_cost[i, j] = col_cost
+        self._col_cost_grad = self.finite_difference(self._col_cost)
+        print("==> Done!")
+        if vis:
+            plt.imshow(self._col_cost)
+            r, c = self._col_cost_grad.shape[:2]
+            Y, X = np.mgrid[0:r, 0:c]
+            dy = self._col_cost_grad[..., 0]
+            dx = -self._col_cost_grad[..., 1]
+
+            n = 2
+            plt.quiver(X[::n, ::n], Y[::n, ::n], dx[::n, ::n], dy[::n, ::n])
+            plt.show()
+
+    def finite_difference(self, value):
+        grad = np.zeros(value.shape + (len(value.shape),))
+
+        for i in range(value.shape[0]):
+            max_j = value.shape[1] - 1
+            if i == 0:
+                grad[i, 0] = [
+                    value[i + 1, 0] - value[i, 0],
+                    value[i, 1] - value[i, 0],
+                ]
+                grad[i, max_j] = [
+                    value[i + 1, max_j] - value[i, max_j],
+                    value[i, max_j] - value[i, max_j - 1],
+                ]
+            elif i == (value.shape[0] - 1):
+                grad[i, 0] = [
+                    value[i, 0] - value[i - 1, 0],
+                    value[i, 1] - value[i, 0],
+                ]
+                grad[i, max_j] = [
+                    value[i, max_j] - value[i - 1, max_j],
+                    value[i, max_j] - value[i, max_j - 1],
+                ]
+            else:
+                grad[i, 0] = [
+                    (value[i + 1, 0] - value[i - 1, 0]) / 2,
+                    value[i, 1] - value[i, 0],
+                ]
+                grad[i, max_j] = [
+                    (value[i + 1, max_j] - value[i - 1, max_j]) / 2,
+                    value[i, max_j] - value[i, max_j - 1],
+                ]
+
+        for j in range(value.shape[1]):
+            max_i = value.shape[0] - 1
+            if j == 0:
+                grad[0, j] = [
+                    value[1, j] - value[0, j],
+                    value[0, j + 1] - value[0, j],
+                ]
+                grad[max_i, j] = [
+                    value[max_i, j] - value[max_i - 1, j],
+                    value[max_i, j + 1] - value[max_i, j],
+                ]
+            elif j == (value.shape[1] - 1):
+                grad[0, j] = [
+                    value[1, j] - value[0, j],
+                    value[0, j] - value[0, j - 1],
+                ]
+                grad[max_i, j] = [
+                    value[max_i, j] - value[max_i - 1, j],
+                    value[max_i, j] - value[max_i, j - 1],
+                ]
+            else:
+                grad[0, j] = [
+                    value[1, j] - value[0, j],
+                    (value[0, j + 1] - value[0, j - 1]) / 2,
+                ]
+                grad[max_i, j] = [
+                    value[max_i, j] - value[max_i - 1, j],
+                    (value[max_i, j + 1] - value[max_i, j - 1]) / 2,
+                ]
+
+        for i in range(1, value.shape[0] - 2):
+            for j in range(1, value.shape[1] - 2):
+                grad[i, j] = [
+                    (value[i + 1, j] - value[i - 1, j]) / 2,
+                    (value[i, j + 1] - value[i, j - 1]) / 2,
+                ]
+        return grad
+
+    @property
+    def col_cost(self):
+        return self._col_cost
+
+    @property
+    def col_cost_grad(self):
+        return self._col_cost_grad

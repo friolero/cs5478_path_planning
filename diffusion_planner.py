@@ -236,105 +236,11 @@ class CollisionCostGuide:
         self._tol_radius = tol_radius
         self._smooth_guide_weight = smooth_guide_weight
         self._col_guide_weight = col_guide_weight
-        self.build_map_cost_grad(vis=vis)
-
-    def build_map_cost_grad(self, vis=False):
-        self._map_col_cost = np.zeros((self._map.row, self._map.col), np.float)
-        self._col_cost_grad = np.zeros(
-            (self._map.row, self._map.col, 2), np.float
-        )
-
-        for i in range(self._map.row):
-            for j in range(self._map.col):
-                dist, curr2obs_vec = self._map.nearest_obstacle(i, j)
-                coll_cost = max(self._tol_radius - dist, 0)
-                self._map_col_cost[i, j] = coll_cost
-        self._col_cost_grad = self.finite_difference(self._map_col_cost)
-        if vis:
-            plt.imshow(self._map_col_cost)
-            r, c = self._col_cost_grad.shape[:2]
-            Y, X = np.mgrid[0:r, 0:c]
-            dy = self._col_cost_grad[..., 0]
-            dx = -self._col_cost_grad[..., 1]
-
-            n = 2
-            plt.quiver(X[::n, ::n], Y[::n, ::n], dx[::n, ::n], dy[::n, ::n])
-            plt.show()
-
-    def finite_difference(self, value):
-        grad = np.zeros(value.shape + (len(value.shape),))
-
-        for i in range(value.shape[0]):
-            max_j = value.shape[1] - 1
-            if i == 0:
-                grad[i, 0] = [
-                    value[i + 1, 0] - value[i, 0],
-                    value[i, 1] - value[i, 0],
-                ]
-                grad[i, max_j] = [
-                    value[i + 1, max_j] - value[i, max_j],
-                    value[i, max_j] - value[i, max_j - 1],
-                ]
-            elif i == (value.shape[0] - 1):
-                grad[i, 0] = [
-                    value[i, 0] - value[i - 1, 0],
-                    value[i, 1] - value[i, 0],
-                ]
-                grad[i, max_j] = [
-                    value[i, max_j] - value[i - 1, max_j],
-                    value[i, max_j] - value[i, max_j - 1],
-                ]
-            else:
-                grad[i, 0] = [
-                    (value[i + 1, 0] - value[i - 1, 0]) / 2,
-                    value[i, 1] - value[i, 0],
-                ]
-                grad[i, max_j] = [
-                    (value[i + 1, max_j] - value[i - 1, max_j]) / 2,
-                    value[i, max_j] - value[i, max_j - 1],
-                ]
-
-        for j in range(value.shape[1]):
-            max_i = value.shape[0] - 1
-            if j == 0:
-                grad[0, j] = [
-                    value[1, j] - value[0, j],
-                    value[0, j + 1] - value[0, j],
-                ]
-                grad[max_i, j] = [
-                    value[max_i, j] - value[max_i - 1, j],
-                    value[max_i, j + 1] - value[max_i, j],
-                ]
-            elif j == (value.shape[1] - 1):
-                grad[0, j] = [
-                    value[1, j] - value[0, j],
-                    value[0, j] - value[0, j - 1],
-                ]
-                grad[max_i, j] = [
-                    value[max_i, j] - value[max_i - 1, j],
-                    value[max_i, j] - value[max_i, j - 1],
-                ]
-            else:
-                grad[0, j] = [
-                    value[1, j] - value[0, j],
-                    (value[0, j + 1] - value[0, j - 1]) / 2,
-                ]
-                grad[max_i, j] = [
-                    value[max_i, j] - value[max_i - 1, j],
-                    (value[max_i, j + 1] - value[max_i, j - 1]) / 2,
-                ]
-
-        for i in range(1, value.shape[0] - 2):
-            for j in range(1, value.shape[1] - 2):
-                grad[i, j] = [
-                    (value[i + 1, j] - value[i - 1, j]) / 2,
-                    (value[i, j + 1] - value[i, j - 1]) / 2,
-                ]
-        return grad
+        self._map.build_map_cost_grad(tol_radius=self._tol_radius, vis=vis)
 
     def grid_cost_grad(self, wp):
         wp = wp.clone().cpu().numpy().astype(int)
-        col_cost_grad = torch.from_numpy(self._col_cost_grad[wp[0], wp[1]])
+        col_cost_grad = torch.from_numpy(self._map.col_cost_grad[wp[0], wp[1]])
         col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
         return (-1) * col_cost_grad
 
@@ -344,14 +250,14 @@ class CollisionCostGuide:
 
         n_check = max(abs(x2 - x1), abs(y2 - y1))
         if n_check == 0:
-            col_cost_grad = self._col_cost_grad[x1, y1]
+            col_cost_grad = self._map.col_cost_grad[x1, y1]
         else:
             col_cost_grad = np.zeros(2)
             step_size = (float(x2 - x1) / n_check, float(y2 - y1) / n_check)
             for i in range(n_check):
                 tmp_x = int(x1 + (i + 1) * step_size[0])
                 tmp_y = int(y1 + (i + 1) * step_size[1])
-                col_cost_grad += self._col_cost_grad[tmp_x, tmp_y]
+                col_cost_grad += self._map.col_cost_grad[tmp_x, tmp_y]
             col_cost_grad /= n_check
         col_cost_grad = torch.from_numpy(col_cost_grad)
         col_cost_grad = col_cost_grad.float().unsqueeze(0).unsqueeze(1)
