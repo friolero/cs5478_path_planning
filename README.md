@@ -1,4 +1,4 @@
-# cs5478 Path Planning for 2D Navigation
+# cs5478 2D Path Planning 
 
 
 ## Usage
