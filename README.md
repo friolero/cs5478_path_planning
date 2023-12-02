@@ -16,5 +16,7 @@
 (general posterior)
 ![](vis/diffusion_task_cond_posterior.png)
 (task conditioned posterior)
+![](vis/diffusion_new_obstacles.png)
+(task conditioned posterior with new obstacles added in the environment)
 
 
