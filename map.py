@@ -192,8 +192,8 @@ class ImageMap2D:
 
     def build_map_cost_grad(self, tol_radius, vis=False):
         print("==> Building map costs and cost gradients...")
-        self._col_cost = np.zeros((self.row, self.col), np.float)
-        self._col_cost_grad = np.zeros((self.row, self.col, 2), np.float)
+        self._col_cost = np.zeros((self.row, self.col), np.float32)
+        self._col_cost_grad = np.zeros((self.row, self.col, 2), np.float32)
 
         for i in range(self.row):
             for j in range(self.col):
