@@ -1,5 +1,7 @@
 import math
 import os
+import pickle as pkl
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,8 +17,6 @@ from diffusion_model import (
 from map import ImageMap2D
 from traj_dataset import TrajectoryDataset
 from utils import dict_to_device, exam_validity, save_vis_paths, set_seed
-
-import time
 
 
 class DiffusionPlanner(BasePlanner):
@@ -64,29 +64,34 @@ class DiffusionPlanner(BasePlanner):
         self._pretrained_fn = pretrained_fn
         if os.path.isfile(self._pretrained_fn):
             self.load(self._pretrained_fn)
-            
+
     def calculate_path_metrics(self, path):
-            def cal_curvature(path):
-                data = np.vstack([(wp[0], wp[1]) for wp in path])
+        def cal_curvature(path):
+            data = np.vstack([(wp[0], wp[1]) for wp in path])
 
-                # first derivatives
-                dx = np.gradient(data[:, 0])
-                dy = np.gradient(data[:, 1])
+            # first derivatives
+            dx = np.gradient(data[:, 0])
+            dy = np.gradient(data[:, 1])
 
-                # second derivatives
-                d2x = np.gradient(dx)
-                d2y = np.gradient(dy)
+            # second derivatives
+            d2x = np.gradient(dx)
+            d2y = np.gradient(dy)
 
-                # calculation of curvature from the typical formula
-                curvature = np.abs(dx * d2y - d2x * dy) / (dx * dx + dy * dy) ** 1.5
-                return np.nan_to_num(curvature, nan=0.0)
+            # calculation of curvature from the typical formula
+            curvature = np.abs(dx * d2y - d2x * dy) / (dx * dx + dy * dy) ** 1.5
+            return np.nan_to_num(curvature, nan=0.0)
 
-            path_length = sum([np.linalg.norm(np.array(path[i + 1]) - np.array(path[i])) for i in range(len(path) - 1)])
-            curvature = cal_curvature(path)
-            mean_curvature = curvature.mean()
-            max_curvature = np.abs(curvature).max()
+        path_length = sum(
+            [
+                np.linalg.norm(np.array(path[i + 1]) - np.array(path[i]))
+                for i in range(len(path) - 1)
+            ]
+        )
+        curvature = cal_curvature(path)
+        mean_curvature = curvature.mean()
+        max_curvature = np.abs(curvature).max()
 
-            return path_length, mean_curvature, max_curvature
+        return path_length, mean_curvature, max_curvature
 
     @property
     def dataset(self):
@@ -245,16 +250,14 @@ class DiffusionPlanner(BasePlanner):
             total_valid_paths.append(valid_paths)
         return total_paths, total_valid_paths
 
-        
-
 
 class CollisionCostGuide:
     def __init__(
         self,
         map,
         dataset,
-        smooth_guide_weight=0.05,
-        col_guide_weight=0.1,
+        smooth_guide_weight=0.1,
+        col_guide_weight=0.0,
         tol_radius=5,
         vis=False,
     ):
@@ -292,7 +295,7 @@ class CollisionCostGuide:
 
     def smoothness_cost_grad(self, x):
         pos_diff = torch.diff(x, dim=1)
-        return (-1.0) * pos_diff ** 2
+        return pos_diff
 
     def __call__(self, x, interpolate=False):
         unnormalized_x = self._dataset.unnormalize_trajectories(x.clone().cpu())
@@ -357,27 +360,36 @@ if __name__ == "__main__":
     else:
         planner.load(ckpt_fn)
 
-    set_seed(77)
+    with open("data/eval_cases.pkl", "rb") as fp:
+        eval_cases = pkl.load(fp)
     map = ImageMap2D(map_fn)
+
     guide = CollisionCostGuide(map, planner.dataset)
     # planner.test(map, n_test=50, fn_prefix="final")
-    for test_idx in range(50):
-        start_node, end_node = np.random.choice(map.free_conf, size=2)
+    for i, (start_node, end_node) in enumerate(eval_cases):
+        print(f"     ==> test case {i}")
 
         unguided_start_time = time.time()
         paths = planner.plan(
-            map, start_node, end_node, unnormalize=True, n_samples=1
+            map, start_node, end_node, unnormalize=True, n_samples=5
         )
         unguided_end_time = time.time()
         unguided_time = unguided_end_time - unguided_start_time
-        
+
         valid_paths = [exam_validity(map, path) for path in paths]
-        save_vis_paths(map, paths, out_fn=None)
-        input("unguided path")
+        save_vis_paths(map, paths, out_fn=f"diffusion_unguided_{i}.png")
+        # input("unguided path")
         for path in paths:
-            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(path)
-            print(f"Path Length: {path_length}, Mean Curvature: {mean_curvature}, Max Curvature: {max_curvature}, Time Taken: {unguided_time}")
-        
+            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(
+                path
+            )
+            print(
+                f"        Success: {sum(valid_paths)}; path length: {path_length}; mean curvature: {mean_curvature}; Time taken: {unguided_time}s"
+            )
+
+        """
+        guide._smooth_guide_weight = 0.0
+        guide._col_guide_weight = 0.08
         guided_start_time = time.time()
         guided_paths = planner.guided_plan(
             map, start_node, end_node, guide, unnormalize=True, n_samples=1
@@ -385,14 +397,60 @@ if __name__ == "__main__":
         guided_end_time = time.time()
         guided_time = guided_end_time - guided_start_time
 
-
-        # BUGGY validity. Didn't check interpolated line but point only
         valid_paths = [exam_validity(map, path) for path in guided_paths]
-        save_vis_paths(map, guided_paths, out_fn=None)
-        input("guided path")
+        save_vis_paths(
+            map, guided_paths, out_fn="diffusion_collision_guided.png"
+        )
+        input("Collision guided path")
         for path in guided_paths:
-            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(path)
-            print(f"Path Length: {path_length}, Mean Curvature: {mean_curvature}, Max Curvature: {max_curvature}, Time Taken: {guided_time}")
-        # input(
-        #    f"[{test_idx}]: start position [{paths[0][0][0]}, {paths[0][0][1]}], end position [{paths[0][-1][0]}, {paths[0][-1][1]}], {sum(valid_paths)} / {len(valid_paths)} valid path planned.\nPress enter to continue."
-        # )
+            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(
+                path
+            )
+            print(
+                f"        Success: {sum(valid_paths)}; path length: {path_length}; mean curvature: {mean_curvature}; Time taken: {guided_time}s"
+            )
+
+        guide._smooth_guide_weight = 0.25
+        guide._col_guide_weight = 0.0
+        guided_start_time = time.time()
+        guided_paths = planner.guided_plan(
+            map, start_node, end_node, guide, unnormalize=True, n_samples=1
+        )
+        guided_end_time = time.time()
+        guided_time = guided_end_time - guided_start_time
+
+        valid_paths = [exam_validity(map, path) for path in guided_paths]
+        save_vis_paths(
+            map, guided_paths, out_fn="diffusion_smoothness_guided.png"
+        )
+        input("Smoothness guided path")
+        for path in guided_paths:
+            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(
+                path
+            )
+            print(
+                f"        Success: {sum(valid_paths)}; path length: {path_length}; mean curvature: {mean_curvature}; Time taken: {guided_time}s"
+            )
+
+        guide._smooth_guide_weight = 0.25
+        guide._col_guide_weight = 0.08
+        guided_start_time = time.time()
+        guided_paths = planner.guided_plan(
+            map, start_node, end_node, guide, unnormalize=True, n_samples=5
+        )
+        guided_end_time = time.time()
+        guided_time = guided_end_time - guided_start_time
+
+        valid_paths = [exam_validity(map, path) for path in guided_paths]
+        save_vis_paths(
+            map, guided_paths, out_fn=f"diffusion_combined_guided_{i}.png"
+        )
+        # input("Combined guided path")
+        for path in guided_paths:
+            path_length, mean_curvature, max_curvature = planner.calculate_path_metrics(
+                path
+            )
+            print(
+                f"        Success: {sum(valid_paths)}; path length: {path_length}; mean curvature: {mean_curvature}; Time taken: {guided_time}s"
+            )
+        """
